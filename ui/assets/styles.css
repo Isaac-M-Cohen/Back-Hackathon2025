@@ -1,0 +1,12 @@
+:root {
+  --bg: #0f172a;
+  --fg: #e2e8f0;
+  --accent: #7dd3fc;
+}
+
+body {
+  font-family: "SF Mono", "Fira Code", monospace;
+  background: var(--bg);
+  color: var(--fg);
+  margin: 0;
+}

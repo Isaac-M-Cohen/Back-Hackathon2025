@@ -1,0 +1,9 @@
+{
+  "gestures": {
+    "swipe_left": { "action": "previous_window" },
+    "swipe_right": { "action": "next_window" }
+  },
+  "voice": {
+    "open_browser": { "phrase": "open browser", "action": "launch_browser" }
+  }
+}

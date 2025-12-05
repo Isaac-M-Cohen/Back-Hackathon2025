@@ -1,0 +1,6 @@
+{
+  "detection_threshold": 0.7,
+  "smoothing_window": 5,
+  "max_hands": 1,
+  "sample_rate_hz": 30
+}

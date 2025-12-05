@@ -1,0 +1,6 @@
+{
+  "wake_word": "computer",
+  "sample_rate_hz": 16000,
+  "vad_sensitivity": 0.6,
+  "language": "en-US"
+}
