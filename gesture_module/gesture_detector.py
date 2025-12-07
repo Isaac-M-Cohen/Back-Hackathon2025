@@ -5,12 +5,11 @@ from gesture_module.hand_tracking import HandTracker
 
 
 class GestureDetector:
-    def __init__(self, controller: CommandController) -> None:
+    def __init__(self, controller: CommandController, config_path: str = "config/gesture_config.json") -> None:
         self.controller = controller
-        self.tracker = HandTracker()
+        self.tracker = HandTracker(config_path=config_path)
 
     def start(self) -> None:
-        """Begin processing gestures (placeholder implementation)."""
-        print("[GESTURE] Detector initialized")
-        # Example: simulate a swipe event
-        self.controller.handle_event(source="gesture", action="swipe_right")
+        """Start hand tracking and landmark visualization."""
+        print("[GESTURE] Detector starting hand tracker")
+        self.tracker.start()
