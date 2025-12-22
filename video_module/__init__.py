@@ -8,6 +8,7 @@ from video_module.gesture_ml import (
     ModelArtifacts,
     normalize_landmarks,
 )
+from video_module.video_stream import VideoStream
 
 __all__ = [
     "GestureCollector",
@@ -16,4 +17,5 @@ __all__ = [
     "GestureTrainer",
     "ModelArtifacts",
     "normalize_landmarks",
+    "VideoStream",
 ]

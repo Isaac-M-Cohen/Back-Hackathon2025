@@ -10,7 +10,7 @@ except ImportError:  # pragma: no cover - optional dep
     load_dotenv = None
 
 from command_controller.controller import CommandController
-from gesture_module.gesture_detector import GestureDetector
+from gesture_module.gesture_recognizer import RealTimeGestureRecognizer
 from voice_module.voice_listener import VoiceListener
 
 
@@ -37,7 +37,18 @@ def bootstrap() -> None:
 
     _ensure_python_version()
     controller = CommandController()
-    gestures = GestureDetector(controller) if _is_enabled("ENABLE_GESTURES", True) else None
+    gestures = None
+    if _is_enabled("ENABLE_GESTURES", True):
+        try:
+            gestures = RealTimeGestureRecognizer(
+                controller,
+                user_id=os.getenv("GESTURE_USER_ID", "default"),
+                confidence_threshold=float(os.getenv("GESTURE_CONFIDENCE", "0.6")),
+                stable_frames=int(os.getenv("GESTURE_STABLE_FRAMES", "5")),
+            )
+        except Exception as exc:
+            print(f"[MAIN] Gesture recognizer unavailable: {exc}")
+            gestures = None
     single_batch_voice = _is_enabled("VOICE_SINGLE_BATCH", False)
     log_token_usage = _is_enabled("LOG_TOKEN_USAGE", False)
     voice = (

@@ -196,11 +196,14 @@ class GestureRecognizer:
         self._current_label: str | None = None
         self._streak: int = 0
 
-    def observe(self, frame_features: np.ndarray) -> tuple[str, float]:
-        """Add a normalized frame and return the smoothed prediction."""
-        self.buffer.append(frame_features)
-        if len(self.buffer) == 0:
+    def observe(self, frame_features: np.ndarray | None) -> tuple[str, float]:
+        """Add a normalized frame (if present) and return the smoothed prediction."""
+        if frame_features is None:
+            self._current_label = None
+            self._streak = 0
             return "NONE", 0.0
+
+        self.buffer.append(frame_features)
         features = _to_window(list(self.buffer), self.window_size).reshape(1, -1)
         probs = self.artifacts.model.predict_proba(features)[0]
         best_idx = int(np.argmax(probs))
