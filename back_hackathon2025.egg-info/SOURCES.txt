@@ -12,6 +12,7 @@ gesture_module/__init__.py
 gesture_module/gesture_detector.py
 gesture_module/gesture_utils.py
 gesture_module/hand_tracking.py
+utils/__init__.py
 utils/event_bus.py
 utils/file_utils.py
 utils/system_utils.py
@@ -20,5 +21,7 @@ video_module/__init__.py
 video_module/video_stream.py
 voice_module/__init__.py
 voice_module/stt_engine.py
+voice_module/stt_whisper_local.py
+voice_module/stt_whisperlive.py
 voice_module/voice_listener.py
 voice_module/voice_utils.py

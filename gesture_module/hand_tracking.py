@@ -37,13 +37,20 @@ class HandTracker:
         if self.active:
             return
 
-        self._cap.open()
+        try:
+            self._cap.open()
+        except Exception as exc:
+            raise RuntimeError(f"[HAND] Unable to open camera: {exc}") from exc
+
         self.active = True
         print("[HAND] Tracking started — press 'q' to exit.")
         try:
             self._run_loop()
         except KeyboardInterrupt:
             print("[HAND] Interrupted by user.")
+        except Exception as exc:
+            # Catch OpenCV C++ exceptions to avoid unhelpful crashes.
+            print(f"[HAND] Tracking error: {exc}")
         finally:
             self.stop()
 
@@ -52,29 +59,33 @@ class HandTracker:
         connection_spec = self._drawer.DrawingSpec(color=(255, 0, 0), thickness=2)
 
         while self.active:
-            ok, frame = self._cap.read()
-            if not ok or frame is None:
-                print("[HAND] Failed to read from camera.")
-                break
+            try:
+                ok, frame = self._cap.read()
+                if not ok or frame is None:
+                    print("[HAND] Failed to read from camera.")
+                    break
 
-            frame = cv2.flip(frame, 1)  # Mirror for user-friendly view.
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self._hands.process(rgb)
+                frame = cv2.flip(frame, 1)  # Mirror for user-friendly view.
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = self._hands.process(rgb)
 
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    self._drawer.draw_landmarks(
-                        frame,
-                        hand_landmarks,
-                        mp.solutions.hands.HAND_CONNECTIONS,
-                        drawing_spec,
-                        connection_spec,
-                    )
+                if results.multi_hand_landmarks:
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        self._drawer.draw_landmarks(
+                            frame,
+                            hand_landmarks,
+                            mp.solutions.hands.HAND_CONNECTIONS,
+                            drawing_spec,
+                            connection_spec,
+                        )
 
-            cv2.imshow(self._window_name, frame)
+                cv2.imshow(self._window_name, frame)
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+            except cv2.error as exc:
+                print(f"[HAND] OpenCV error: {exc}")
                 break
 
     def stop(self) -> None:
