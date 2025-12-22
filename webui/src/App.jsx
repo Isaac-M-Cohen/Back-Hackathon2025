@@ -56,9 +56,9 @@ export default function GestureControlApp() {
     if (hotkey && selectedPreset) {
       try {
         if (mode === "static") {
-          await Api.addStaticGesture(selectedPreset.id, 60);
+          await Api.addStaticGesture(selectedPreset.id, 60, hotkey);
         } else {
-          await Api.addDynamicGesture(selectedPreset.id, 6, 25);
+          await Api.addDynamicGesture(selectedPreset.id, 6, 25, hotkey);
         }
         await Api.train();
         await refreshGestures();

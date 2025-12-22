@@ -16,19 +16,20 @@ export const Api = {
   async listGestures() {
     return request("/gestures");
   },
-  async addStaticGesture(label, targetFrames = 60) {
+  async addStaticGesture(label, targetFrames = 60, hotkey = "") {
     return request("/gestures/static", {
       method: "POST",
-      body: JSON.stringify({ label, target_frames: targetFrames }),
+      body: JSON.stringify({ label, target_frames: targetFrames, hotkey }),
     });
   },
-  async addDynamicGesture(label, repetitions = 5, sequenceLength = 30) {
+  async addDynamicGesture(label, repetitions = 5, sequenceLength = 30, hotkey = "") {
     return request("/gestures/dynamic", {
       method: "POST",
       body: JSON.stringify({
         label,
         repetitions,
         sequence_length: sequenceLength,
+        hotkey,
       }),
     });
   },
