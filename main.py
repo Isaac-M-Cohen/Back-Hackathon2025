@@ -10,8 +10,9 @@ except ImportError:  # pragma: no cover - optional dep
     load_dotenv = None
 
 from command_controller.controller import CommandController
-from gesture_module.gesture_recognizer import RealTimeGestureRecognizer
+from gesture_module.workflow import GestureWorkflow
 from voice_module.voice_listener import VoiceListener
+from ui.main_window import MainWindow
 
 
 def _ensure_python_version() -> None:
@@ -37,18 +38,10 @@ def bootstrap() -> None:
 
     _ensure_python_version()
     controller = CommandController()
-    gestures = None
-    if _is_enabled("ENABLE_GESTURES", True):
-        try:
-            gestures = RealTimeGestureRecognizer(
-                controller,
-                user_id=os.getenv("GESTURE_USER_ID", "default"),
-                confidence_threshold=float(os.getenv("GESTURE_CONFIDENCE", "0.6")),
-                stable_frames=int(os.getenv("GESTURE_STABLE_FRAMES", "5")),
-            )
-        except Exception as exc:
-            print(f"[MAIN] Gesture recognizer unavailable: {exc}")
-            gestures = None
+    gesture_workflow = GestureWorkflow(
+        user_id=os.getenv("GESTURE_USER_ID", "default"),
+        window_size=int(os.getenv("GESTURE_WINDOW", "30")),
+    )
     single_batch_voice = _is_enabled("VOICE_SINGLE_BATCH", False)
     log_token_usage = _is_enabled("LOG_TOKEN_USAGE", False)
     voice = (
@@ -63,27 +56,25 @@ def bootstrap() -> None:
 
     # TODO: replace with real event loop and UI launch.
     controller.start()
+    main_window = MainWindow(gesture_workflow=gesture_workflow)
+    main_window.launch()
+    # Voice can still run headless; camera stays closed unless UI invokes workflow.
     if voice:
         voice.start()
-    if gestures:
-        # Run gestures on main thread when voice is disabled to avoid OpenCV/GUI
-        # issues on macOS; otherwise start in background for concurrency.
-        if voice is None:
-            gestures.start_blocking()
-        else:
-            gestures.start()
 
     try:
 
-        if not voice and not gestures:
-            print("[MAIN] No input modules enabled (set ENABLE_VOICE and/or ENABLE_GESTURES).")
+        if not voice:
+            print("[MAIN] Voice disabled; UI controls gestures manually.")
+            while main_window.is_open:
+                time.sleep(0.2)
             return
 
         while True:
             voice_alive = voice.is_running() if voice else False
-            gesture_alive = gestures.is_running() if gestures else False
+            # Gestures are controlled via UI; check if app is still open.
 
-            if not voice_alive and not gesture_alive:
+            if not voice_alive or not main_window.is_open:
                 break
             time.sleep(0.2)
     except KeyboardInterrupt:
@@ -91,8 +82,6 @@ def bootstrap() -> None:
     finally:
         if voice and voice.is_running():
             voice.stop()
-        if gestures and gestures.is_running():
-            gestures.stop()
 
 
 if __name__ == "__main__":
