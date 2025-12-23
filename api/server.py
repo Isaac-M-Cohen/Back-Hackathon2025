@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from command_controller.controller import CommandController
@@ -18,6 +19,21 @@ controller = CommandController()
 workflow = GestureWorkflow(user_id=USER_ID)
 
 app = FastAPI(title="Gesture Control API", version="0.1.0")
+
+# Allow local dev origins (Vite, etc.)
+_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:1573",
+    "http://127.0.0.1:1573",
+}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class StaticGestureRequest(BaseModel):
