@@ -22,10 +22,29 @@ export default function GestureControlApp() {
   const [hoveredId, setHoveredId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [error, setError] = useState("");
+  const [lastDetection, setLastDetection] = useState(null);
 
   useEffect(() => {
     refreshGestures().catch((err) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    if (!isRunning) {
+      setLastDetection(null);
+      return undefined;
+    }
+    const id = setInterval(async () => {
+      try {
+        const res = await Api.lastDetection();
+        if (res && res.label) {
+          setLastDetection(res);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
 
   async function refreshGestures() {
     try {
@@ -120,6 +139,16 @@ export default function GestureControlApp() {
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">
             {error}
+          </div>
+        )}
+
+        {lastDetection && (
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm flex items-center justify-between">
+            <span>
+              Detected: <strong>{lastDetection.label}</strong>{" "}
+              {lastDetection.confidence !== undefined &&
+                `(conf ${lastDetection.confidence.toFixed(2)})`}
+            </span>
           </div>
         )}
 

@@ -45,6 +45,9 @@ export const Api = {
   async stopRecognition() {
     return request("/recognition/stop", { method: "POST" });
   },
+  async lastDetection() {
+    return request("/recognition/last");
+  },
   async deleteGesture(label) {
     return request("/gestures/delete", {
       method: "POST",

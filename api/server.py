@@ -130,6 +130,12 @@ def root():
     return "<html><body><h1>Gesture Control API</h1><p>Status: OK</p></body></html>"
 
 
+@app.get("/recognition/last")
+def last_detection():
+    det = workflow.last_detection()
+    return det or {}
+
+
 if __name__ == "__main__":
     import uvicorn
 

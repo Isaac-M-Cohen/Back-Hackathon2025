@@ -32,9 +32,11 @@ class RealTimeGestureRecognizer:
         confidence_threshold: float = 0.6,
         stable_frames: int = 5,
         show_window: bool = False,
+        on_detection: Optional[callable] = None,
     ) -> None:
         self.controller = controller
         self.show_window = show_window
+        self.on_detection = on_detection
         self._thread: Optional[threading.Thread] = None
         self._window_name = "Gesture Recognition"
         cfg = load_json(config_path)
@@ -138,6 +140,11 @@ class RealTimeGestureRecognizer:
                     self.controller.handle_event(
                         source="gesture", action=label, payload={"confidence": confidence}
                     )
+                    if self.on_detection:
+                        try:
+                            self.on_detection(label=label, confidence=confidence)
+                        except Exception:
+                            pass
 
                 if self.show_window:
                     cv2.putText(

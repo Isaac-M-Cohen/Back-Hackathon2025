@@ -24,6 +24,7 @@ class GestureWorkflow:
         self.dataset = GestureDataset(user_id=user_id)
         self.trainer = GestureTrainer(window_size=window_size)
         self._recognizer: RealTimeGestureRecognizer | None = None
+        self._last_detection: dict | None = None
 
     def collect_static(self, label: str, target_frames: int = 60, *, show_preview: bool = False) -> None:
         collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
@@ -70,6 +71,7 @@ class GestureWorkflow:
             confidence_threshold=confidence_threshold,
             stable_frames=stable_frames,
             show_window=show_window,
+            on_detection=self._record_detection,
         )
         self._recognizer.start()
 
@@ -82,3 +84,12 @@ class GestureWorkflow:
 
     def is_recognizing(self) -> bool:
         return bool(self._recognizer and self._recognizer.is_running())
+
+    def _record_detection(self, *, label: str, confidence: float) -> None:
+        self._last_detection = {
+            "label": label,
+            "confidence": confidence,
+        }
+
+    def last_detection(self) -> dict | None:
+        return self._last_detection
