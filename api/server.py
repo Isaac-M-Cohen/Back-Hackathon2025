@@ -100,12 +100,16 @@ def train():
 
 @app.post("/recognition/start")
 def start_recognition(req: StartRecognitionRequest):
-    workflow.start_recognition(
-        controller,
-        confidence_threshold=req.confidence_threshold,
-        stable_frames=req.stable_frames,
-        show_window=req.show_window,
-    )
+    try:
+        workflow.start_recognition(
+            controller,
+            confidence_threshold=req.confidence_threshold,
+            stable_frames=req.stable_frames,
+            show_window=req.show_window,
+        )
+    except RuntimeError as exc:
+        # Surface missing model / setup errors as 400 for the UI.
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
 

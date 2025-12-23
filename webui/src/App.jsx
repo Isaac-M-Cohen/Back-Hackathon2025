@@ -95,7 +95,7 @@ export default function GestureControlApp() {
         setIsRunning(true);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to start/stop recognition. Collect and train first?");
     }
   };
 
