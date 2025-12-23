@@ -42,13 +42,13 @@ class RealTimeGestureRecognizer:
         dataset = GestureDataset(user_id=user_id)
         artifacts = dataset.load_model()
         if artifacts is None:
-            raise RuntimeError(
-                f"No trained gesture model found for user '{user_id}'. "
-                "Collect samples and train via GestureTrainer first."
-            )
+            # Build a fallback NONE-only model so recognition can start without training.
+            artifacts = dataset.build_none_only_artifacts(window_size=int(cfg.get("window_size", 30)))
 
-        input_dim = artifacts.model.coefs_[0].shape[0]
-        self.window_size = input_dim // 63 if input_dim % 63 == 0 else 30
+        input_dim = getattr(artifacts.model, "feature_dim", None)
+        if input_dim is None and hasattr(artifacts.model, "coefs_"):
+            input_dim = artifacts.model.coefs_[0].shape[0]
+        self.window_size = input_dim // 63 if input_dim and input_dim % 63 == 0 else int(cfg.get("window_size", 30))
         self.recognizer = MLRecognizer(
             artifacts,
             window_size=self.window_size,

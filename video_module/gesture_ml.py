@@ -76,6 +76,19 @@ class ModelArtifacts:
     label_to_idx: dict[str, int]
 
 
+class _AlwaysNoneModel:
+    """Fallback model that always predicts NONE when no training data exists."""
+
+    def __init__(self, feature_dim: int) -> None:
+        self.feature_dim = feature_dim
+        # Shape to satisfy existing logic that inspects coefs_ to derive input dim.
+        self.coefs_ = [np.zeros((feature_dim, 1), dtype=np.float32)]
+        self.classes_ = np.array([0], dtype=np.int64)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        return np.ones((len(X), 1), dtype=np.float64)
+
+
 class GestureDataset:
     """Manages per-user dataset and model storage."""
 
@@ -193,6 +206,17 @@ class GestureDataset:
         self.label_to_idx = {lbl: i for i, lbl in enumerate(self.labels)}
         self.hotkeys.pop(label, None)
         self.save()
+
+    def build_none_only_artifacts(self, window_size: int = 30) -> ModelArtifacts:
+        """Create and persist a minimal model that always returns NONE."""
+        self.labels = ["NONE"]
+        self.label_to_idx = {"NONE": 0}
+        feature_dim = window_size * 63
+        model = _AlwaysNoneModel(feature_dim)
+        artifacts = ModelArtifacts(model=model, labels=self.labels, label_to_idx=self.label_to_idx)
+        self.save_model(artifacts)
+        self.save()
+        return artifacts
 
 
 class GestureTrainer:
