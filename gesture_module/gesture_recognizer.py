@@ -70,6 +70,7 @@ class RealTimeGestureRecognizer:
         )
         self._drawer = mp.solutions.drawing_utils
         self.active = False
+        self._stop_event = threading.Event()
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -78,6 +79,7 @@ class RealTimeGestureRecognizer:
         if self.active:
             print("[GESTURE] Recognizer already running")
             return
+        self._stop_event.clear()
 
         def _runner() -> None:
             try:
@@ -85,8 +87,7 @@ class RealTimeGestureRecognizer:
             except Exception as exc:  # pragma: no cover
                 print(f"[GESTURE] Recognizer error: {exc}")
             finally:
-                self.active = False
-                self._thread = None
+                self._cleanup(join_thread=False)
 
         self._thread = threading.Thread(target=_runner, name="GestureRecognizer", daemon=False)
         self._thread.start()
@@ -102,7 +103,7 @@ class RealTimeGestureRecognizer:
         self.active = True
         print("[GESTURE] Recognition started — press 'q' to exit.")
         try:
-            while self.active:
+            while self.active and not self._stop_event.is_set():
                 ok, frame = self.stream.read()
                 if not ok or frame is None:
                     print("[GESTURE] Failed to read from camera.")
@@ -153,17 +154,23 @@ class RealTimeGestureRecognizer:
         except cv2.error as exc:
             print(f"[GESTURE] OpenCV error: {exc}")
         finally:
-            self.stop()
+            self._cleanup(join_thread=False)
 
     def stop(self) -> None:
         self.active = False
+        self._stop_event.set()
+        self._cleanup(join_thread=True)
+        print("[GESTURE] Recognition stopped")
+
+    def _cleanup(self, join_thread: bool) -> None:
+        self.active = False
         self.stream.close()
         self._hands.close()
-        cv2.destroyAllWindows()
-        if self._thread:
+        if self.show_window:
+            cv2.destroyAllWindows()
+        if join_thread and self._thread and threading.current_thread() is not self._thread:
             self._thread.join(timeout=2)
-            self._thread = None
-        print("[GESTURE] Recognition stopped")
+        self._thread = None
 
     def is_running(self) -> bool:
         return bool((self._thread and self._thread.is_alive()) or self.active)
