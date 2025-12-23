@@ -56,7 +56,7 @@ class DeleteGestureRequest(BaseModel):
 class StartRecognitionRequest(BaseModel):
     confidence_threshold: float = Field(default=0.6, ge=0, le=1)
     stable_frames: int = Field(default=5, ge=1, le=30)
-    show_window: bool = True
+    show_window: bool = False
 
 
 @app.get("/gestures")
@@ -66,7 +66,7 @@ def list_gestures():
 
 @app.post("/gestures/static")
 def add_static(req: StaticGestureRequest):
-    workflow.collect_static(req.label, target_frames=req.target_frames)
+    workflow.collect_static(req.label, target_frames=req.target_frames, show_preview=False)
     workflow.dataset.set_hotkey(req.label, req.hotkey)
     workflow.dataset.save()
     return {"status": "ok"}
@@ -78,6 +78,7 @@ def add_dynamic(req: DynamicGestureRequest):
         req.label,
         repetitions=req.repetitions,
         sequence_length=req.sequence_length,
+        show_preview=False,
     )
     workflow.dataset.set_hotkey(req.label, req.hotkey)
     workflow.dataset.save()

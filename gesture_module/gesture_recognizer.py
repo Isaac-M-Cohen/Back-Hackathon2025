@@ -31,7 +31,7 @@ class RealTimeGestureRecognizer:
         config_path: str = "config/gesture_config.json",
         confidence_threshold: float = 0.6,
         stable_frames: int = 5,
-        show_window: bool = True,
+        show_window: bool = False,
     ) -> None:
         self.controller = controller
         self.show_window = show_window

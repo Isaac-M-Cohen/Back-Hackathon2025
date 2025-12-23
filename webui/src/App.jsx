@@ -90,7 +90,7 @@ export default function GestureControlApp() {
         await Api.startRecognition({
           confidence_threshold: 0.6,
           stable_frames: 5,
-          show_window: true,
+          show_window: false,
         });
         setIsRunning(true);
       }

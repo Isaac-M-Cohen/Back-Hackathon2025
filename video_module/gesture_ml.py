@@ -305,9 +305,11 @@ class GestureCollector:
         device_index: int = 0,
         detection_confidence: float = 0.6,
         tracking_confidence: float = 0.6,
+        show_preview: bool = False,
     ) -> None:
         self.window_size = window_size
         self.mirror_left = mirror_left
+        self.show_preview = show_preview
         self.stream = VideoStream(device_index)
         self._drawer = mp.solutions.drawing_utils
         self._hands = mp.solutions.hands.Hands(
@@ -368,21 +370,23 @@ class GestureCollector:
                             mp.solutions.hands.HAND_CONNECTIONS,
                         )
 
-                cv2.putText(
-                    frame,
-                    f"{gesture_label} frames: {len(samples)}/{target_frames}",
-                    (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0),
-                    2,
-                )
-                cv2.imshow("Collect Static Gesture", frame)
-                if (cv2.waitKey(1) & 0xFF) == ord("q"):
-                    break
+                if self.show_preview:
+                    cv2.putText(
+                        frame,
+                        f"{gesture_label} frames: {len(samples)}/{target_frames}",
+                        (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2,
+                    )
+                    cv2.imshow("Collect Static Gesture", frame)
+                    if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                        break
         finally:
             self.stream.close()
-            cv2.destroyAllWindows()
+            if self.show_preview:
+                cv2.destroyAllWindows()
 
         if samples:
             # Convert each single frame into a padded window for training.
@@ -396,18 +400,19 @@ class GestureCollector:
         repetitions: int = 5,
         sequence_length: int = 30,
     ) -> list[np.ndarray]:
-        """Collect short sequences (e.g., swipes). Press 's' to start each capture."""
+        """Collect short sequences (e.g., swipes)."""
         sequences: list[np.ndarray] = []
         self.stream.open()
         print(
             f"[COLLECT] Dynamic gesture='{gesture_label}' repetitions={repetitions} "
             f"sequence_length={sequence_length}"
         )
-        print("          Press 's' to record each repetition, 'q' to abort.")
+        if self.show_preview:
+            print("          Press 's' to record each repetition, 'q' to abort.")
         try:
             for rep in range(repetitions):
                 buffer: list[np.ndarray] = []
-                recording = False
+                recording = not self.show_preview  # auto-start when headless
                 while True:
                     ok, frame = self._read()
                     if not ok or frame is None:
@@ -425,29 +430,30 @@ class GestureCollector:
                             mp.solutions.hands.HAND_CONNECTIONS,
                         )
 
-                    status = f"{gesture_label} rep {rep+1}/{repetitions}"
-                    if recording:
-                        status += f" recording {len(buffer)}/{sequence_length}"
-                    else:
-                        status += " press 's' to start"
+                    if self.show_preview:
+                        status = f"{gesture_label} rep {rep+1}/{repetitions}"
+                        if recording:
+                            status += f" recording {len(buffer)}/{sequence_length}"
+                        else:
+                            status += " press 's' to start"
 
-                    cv2.putText(
-                        frame,
-                        status,
-                        (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 0),
-                        2,
-                    )
-                    cv2.imshow("Collect Dynamic Gesture", frame)
-                    key = cv2.waitKey(1) & 0xFF
+                        cv2.putText(
+                            frame,
+                            status,
+                            (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 0),
+                            2,
+                        )
+                        cv2.imshow("Collect Dynamic Gesture", frame)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord("q"):
+                            return sequences
+                        if not recording and key == ord("s"):
+                            recording = True
+                            buffer = []
 
-                    if key == ord("q"):
-                        return sequences
-                    if not recording and key == ord("s"):
-                        recording = True
-                        buffer = []
                     if recording and len(buffer) >= sequence_length:
                         window = _to_window(buffer, self.window_size)
                         sequences.append(window)
@@ -457,6 +463,7 @@ class GestureCollector:
                         break
         finally:
             self.stream.close()
-            cv2.destroyAllWindows()
+            if self.show_preview:
+                cv2.destroyAllWindows()
 
         return sequences

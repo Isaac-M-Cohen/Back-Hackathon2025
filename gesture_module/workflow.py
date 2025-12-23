@@ -25,8 +25,8 @@ class GestureWorkflow:
         self.trainer = GestureTrainer(window_size=window_size)
         self._recognizer: RealTimeGestureRecognizer | None = None
 
-    def collect_static(self, label: str, target_frames: int = 60) -> None:
-        collector = GestureCollector(window_size=self.window_size)
+    def collect_static(self, label: str, target_frames: int = 60, *, show_preview: bool = False) -> None:
+        collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
         samples = collector.collect_static(label, target_frames=target_frames)
         if samples:
             self.dataset.add_samples(label, samples)
@@ -38,8 +38,9 @@ class GestureWorkflow:
         *,
         repetitions: int = 5,
         sequence_length: int = 30,
+        show_preview: bool = False,
     ) -> None:
-        collector = GestureCollector(window_size=self.window_size)
+        collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
         samples = collector.collect_dynamic(
             label, repetitions=repetitions, sequence_length=sequence_length
         )
