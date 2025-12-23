@@ -75,8 +75,10 @@ class GestureWorkflow:
 
     def stop_recognition(self) -> None:
         if self._recognizer:
-            self._recognizer.stop()
-            self._recognizer = None
+            try:
+                self._recognizer.stop()
+            finally:
+                self._recognizer = None
 
     def is_recognizing(self) -> bool:
         return bool(self._recognizer and self._recognizer.is_running())

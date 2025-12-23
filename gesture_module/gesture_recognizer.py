@@ -71,6 +71,7 @@ class RealTimeGestureRecognizer:
         self._drawer = mp.solutions.drawing_utils
         self.active = False
         self._stop_event = threading.Event()
+        self._closed = False
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -163,9 +164,16 @@ class RealTimeGestureRecognizer:
         print("[GESTURE] Recognition stopped")
 
     def _cleanup(self, join_thread: bool) -> None:
+        if self._closed:
+            return
         self.active = False
         self.stream.close()
-        self._hands.close()
+        try:
+            self._hands.close()
+        except ValueError:
+            # MediaPipe may already be closed; ignore.
+            pass
+        self._closed = True
         if self.show_window:
             cv2.destroyAllWindows()
         if join_thread and self._thread and threading.current_thread() is not self._thread:
