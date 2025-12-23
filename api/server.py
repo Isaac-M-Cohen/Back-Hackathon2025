@@ -6,6 +6,7 @@ import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from command_controller.controller import CommandController
@@ -101,6 +102,11 @@ def stop_recognition():
 @app.get("/status")
 def status():
     return {"recognition_running": workflow.is_recognizing(), "user_id": workflow.user_id}
+
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return "<html><body><h1>Gesture Control API</h1><p>Status: OK</p></body></html>"
 
 
 if __name__ == "__main__":
