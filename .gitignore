@@ -4,3 +4,26 @@
 .env.dev
 .env.prod
 env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+
+# Node/React
+webui/node_modules/
+webui/dist/
+webui/.vite/
+webui/package-lock.json
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Misc
+webui/EndpointsStructure.txt
