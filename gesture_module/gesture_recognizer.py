@@ -7,6 +7,7 @@ applies temporal smoothing, and forwards recognized labels to CommandController.
 from __future__ import annotations
 
 import threading
+import time
 from typing import Optional
 
 import cv2
@@ -33,10 +34,12 @@ class RealTimeGestureRecognizer:
         stable_frames: int = 5,
         show_window: bool = False,
         on_detection: Optional[callable] = None,
+        emit_cooldown_secs: float = 0.5,
     ) -> None:
         self.controller = controller
         self.show_window = show_window
         self.on_detection = on_detection
+        self.emit_cooldown_secs = emit_cooldown_secs
         self._thread: Optional[threading.Thread] = None
         self._window_name = "Gesture Recognition"
         cfg = load_json(config_path)
@@ -74,6 +77,8 @@ class RealTimeGestureRecognizer:
         self.active = False
         self._stop_event = threading.Event()
         self._closed = False
+        self._last_emitted_label: str | None = None
+        self._last_emit_time: float = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -137,9 +142,17 @@ class RealTimeGestureRecognizer:
                     label, confidence = self.recognizer.observe(None)
 
                 if label != "NONE":
-                    self.controller.handle_event(
-                        source="gesture", action=label, payload={"confidence": confidence}
+                    now = time.monotonic()
+                    should_emit = (
+                        label != self._last_emitted_label
+                        or (now - self._last_emit_time) >= self.emit_cooldown_secs
                     )
+                    if should_emit:
+                        self.controller.handle_event(
+                            source="gesture", action=label, payload={"confidence": confidence}
+                        )
+                        self._last_emitted_label = label
+                        self._last_emit_time = now
                 if self.on_detection:
                     try:
                         # Always record detections, including NONE, for UI status.

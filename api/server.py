@@ -116,7 +116,11 @@ def start_recognition(req: StartRecognitionRequest):
 
 @app.post("/recognition/stop")
 def stop_recognition():
-    workflow.stop_recognition()
+    try:
+        workflow.stop_recognition()
+    except Exception as exc:
+        # Prevent a crash from propagating to the UI; log and return error.
+        raise HTTPException(status_code=500, detail=str(exc))
     return {"status": "ok"}
 
 
