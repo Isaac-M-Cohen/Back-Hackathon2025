@@ -140,11 +140,12 @@ class RealTimeGestureRecognizer:
                     self.controller.handle_event(
                         source="gesture", action=label, payload={"confidence": confidence}
                     )
-                    if self.on_detection:
-                        try:
-                            self.on_detection(label=label, confidence=confidence)
-                        except Exception:
-                            pass
+                if self.on_detection:
+                    try:
+                        # Always record detections, including NONE, for UI status.
+                        self.on_detection(label=label, confidence=confidence)
+                    except Exception:
+                        pass
 
                 if self.show_window:
                     cv2.putText(
