@@ -54,6 +54,9 @@ def _run_tauri(command: str = "tauri:dev") -> None:
 
     env = os.environ.copy()
     env.setdefault("EASY_PYTHON_BIN", sys.executable)
+    cargo_bin = str(Path.home() / ".cargo" / "bin")
+    if cargo_bin not in env.get("PATH", ""):
+        env["PATH"] = f"{cargo_bin}:{env.get('PATH', '')}"
 
     cmd = ["npm", "run", command]
     subprocess.run(cmd, cwd=webui_dir, env=env, check=True)
