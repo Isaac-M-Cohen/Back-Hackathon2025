@@ -1,13 +1,31 @@
 """Entry point for the hand + voice control system."""
 
-import sys
+import importlib.util
 import os
-import time
+import sys
+from pathlib import Path
 
 try:  # Optional dependency; enable .env loading when available.
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover - optional dep
     load_dotenv = None
+
+def _ensure_qt_plugin_path() -> None:
+    """Set Qt plugin paths before importing PySide6-based modules."""
+    if os.getenv("QT_QPA_PLATFORM_PLUGIN_PATH"):
+        return
+    spec = importlib.util.find_spec("PySide6")
+    if not spec or not spec.submodule_search_locations:
+        return
+    pyside_root = Path(spec.submodule_search_locations[0])
+    plugin_root = pyside_root / "Qt" / "plugins"
+    platforms_path = plugin_root / "platforms"
+    if platforms_path.exists():
+        os.environ.setdefault("QT_QPA_PLATFORM_PLUGIN_PATH", str(platforms_path))
+        os.environ.setdefault("QT_PLUGIN_PATH", str(plugin_root))
+
+
+_ensure_qt_plugin_path()
 
 from command_controller.controller import CommandController
 from gesture_module.workflow import GestureWorkflow
@@ -30,11 +48,37 @@ def _is_enabled(name: str, default: bool = True) -> bool:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
+def _load_env_files() -> None:
+    """Load .env files from common locations (repo, bundle, home)."""
+    if not load_dotenv:
+        return
+
+    candidates: list[Path] = []
+    cwd = Path.cwd()
+    candidates.extend([cwd / "env/.env", cwd / ".env"])
+
+    module_root = Path(__file__).resolve().parent
+    candidates.extend([module_root / "env/.env", module_root / ".env"])
+
+    home = Path.home()
+    candidates.extend([home / ".easy.env", home / ".env.easy"])
+
+    if getattr(sys, "frozen", False):
+        meipass = Path(getattr(sys, "_MEIPASS", ""))
+        if meipass:
+            candidates.extend([meipass / "env/.env", meipass / ".env"])
+        exec_path = Path(sys.executable).resolve()
+        resources = exec_path.parent.parent / "Resources"
+        candidates.extend([resources / "env/.env", resources / ".env"])
+
+    for path in candidates:
+        if path.exists():
+            load_dotenv(dotenv_path=str(path), override=False)
+
 
 def bootstrap() -> None:
     """Wire up core modules and start listeners."""
-    if load_dotenv:
-        load_dotenv(dotenv_path="env/.env", override=False)
+    _load_env_files()
 
     _ensure_python_version()
     controller = CommandController()
@@ -54,29 +98,14 @@ def bootstrap() -> None:
         else None
     )
 
-    # TODO: replace with real event loop and UI launch.
     controller.start()
-    main_window = MainWindow(gesture_workflow=gesture_workflow)
-    main_window.launch()
     # Voice can still run headless; camera stays closed unless UI invokes workflow.
     if voice:
         voice.start()
 
+    main_window = MainWindow(gesture_workflow=gesture_workflow, controller=controller)
     try:
-
-        if not voice:
-            print("[MAIN] Voice disabled; UI controls gestures manually.")
-            while main_window.is_open:
-                time.sleep(0.2)
-            return
-
-        while True:
-            voice_alive = voice.is_running() if voice else False
-            # Gestures are controlled via UI; check if app is still open.
-
-            if not voice_alive or not main_window.is_open:
-                break
-            time.sleep(0.2)
+        main_window.launch()
     except KeyboardInterrupt:
         print("[MAIN] Received interrupt. Shutting down...")
     finally:
