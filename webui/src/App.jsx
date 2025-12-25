@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause } from "lucide-react";
-import { Api } from "./api";
+import { Api, initApiBase } from "./api";
 
 const PRESET_GESTURES = [
   { id: "thumbs_up", name: "Thumbs Up", duration: 1.2 },
@@ -25,7 +25,9 @@ export default function GestureControlApp() {
   const [lastDetection, setLastDetection] = useState(null);
 
   useEffect(() => {
-    refreshGestures().catch((err) => setError(err.message));
+    initApiBase().then(() => {
+      refreshGestures().catch((err) => setError(err.message));
+    });
   }, []);
 
   useEffect(() => {

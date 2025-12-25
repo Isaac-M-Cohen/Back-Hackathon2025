@@ -20,6 +20,7 @@ webui/dist/
 webui/.vite/
 webui/package-lock.json
 webui/src-tauri/target/
+webui/src-tauri/bin/
 
 # OS/IDE
 .DS_Store

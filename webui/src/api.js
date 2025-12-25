@@ -1,7 +1,27 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+let apiBase =
+  import.meta.env.VITE_API_BASE ||
+  (typeof window !== "undefined" && window.__EASY_API_BASE__) ||
+  "http://127.0.0.1:8000";
+
+export function setApiBase(nextBase) {
+  if (nextBase) {
+    apiBase = nextBase;
+  }
+}
+
+export async function initApiBase() {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    await listen("easy://api-base", (event) => {
+      setApiBase(event.payload);
+    });
+  } catch {
+    // Tauri APIs not available (web dev mode).
+  }
+}
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });

@@ -16,6 +16,13 @@ npm run tauri:build # desktop app (bundle)
 - Requires Rust toolchain: https://rustup.rs
 - `npm run tauri:dev` starts Vite and launches the desktop shell.
 - `npm run tauri:build` produces native bundles under `webui/src-tauri/target/`.
+- The desktop app auto-starts the Python backend as a sidecar.
+
+## Backend sidecar (Python)
+Build the backend binary used by the Tauri bundle:
+```bash
+scripts/build_tauri_backend.sh
+```
 
 ## Expected backend endpoints
 - `GET /gestures` → `{ items: [{ label, hotkey? }] }`
