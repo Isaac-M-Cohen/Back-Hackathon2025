@@ -15,6 +15,8 @@ It supports static gestures (single-frame samples) and dynamic gestures
 from __future__ import annotations
 
 import json
+import os
+import sys
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,11 +91,29 @@ class _AlwaysNoneModel:
         return np.ones((len(X), 1), dtype=np.float64)
 
 
+def _default_user_data_dir() -> Path:
+    """Resolve a writable user_data root for both dev and bundled app runs."""
+    data_dir = os.getenv("USER_DATA_DIR") or os.getenv("DATA_DIR")
+    if data_dir:
+        data_path = Path(data_dir).expanduser()
+        if data_path.is_absolute():
+            return data_path / "user_data"
+        # Relative DATA_DIR only makes sense in dev runs.
+        if not getattr(sys, "frozen", False):
+            return data_path / "user_data"
+
+    if getattr(sys, "frozen", False):
+        return Path.home() / "Library" / "Application Support" / "easy" / "user_data"
+
+    return Path("user_data")
+
+
 class GestureDataset:
     """Manages per-user dataset and model storage."""
 
-    def __init__(self, user_id: str, base_dir: str | Path = "user_data") -> None:
-        self.base_dir = Path(base_dir) / user_id
+    def __init__(self, user_id: str, base_dir: str | Path | None = None) -> None:
+        root = Path(base_dir) if base_dir is not None else _default_user_data_dir()
+        self.base_dir = root / user_id
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.X_path = self.base_dir / "X.npy"
         self.y_path = self.base_dir / "y.npy"
