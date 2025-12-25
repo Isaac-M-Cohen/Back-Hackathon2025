@@ -1,6 +1,8 @@
 use std::net::TcpListener;
+use std::path::PathBuf;
+use std::process::Command;
 
-use tauri::{Manager, Wry};
+use tauri::{Emitter, Manager, Wry};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,7 +17,7 @@ pub fn run() {
       }
 
       let api_base = spawn_backend(app)?;
-      app.emit_all("easy://api-base", api_base.clone())?;
+      app.emit("easy://api-base", api_base.clone())?;
 
       if let Some(window) = app.get_webview_window("main") {
         let script = format!(
@@ -39,39 +41,49 @@ fn pick_port() -> Result<u16, Box<dyn std::error::Error>> {
 }
 
 fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Error>> {
-  let port = pick_port()?;
-  let host = "127.0.0.1";
-  let api_base = format!("http://{host}:{port}");
+    let port = pick_port()?;
+    let host = "127.0.0.1";
+    let api_base = format!("http://{host}:{port}");
 
-  let mut cmd = if cfg!(debug_assertions) {
-    let python = std::env::var("EASY_PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
-    let mut cmd = tauri::process::Command::new(python);
-    cmd.args([
-      "-m",
-      "uvicorn",
-      "api.server:app",
-      "--host",
-      host,
-      "--port",
-      &port.to_string(),
-    ]);
-    cmd
-  } else {
-    let mut cmd = tauri::process::Command::new_sidecar("backend")?;
-    cmd.env("EASY_API_HOST", host);
-    cmd.env("EASY_API_PORT", port.to_string());
-    cmd
-  };
-
-  let (mut rx, _child) = cmd.spawn()?;
-  tauri::async_runtime::spawn(async move {
-    while let Some(event) = rx.recv().await {
-      if let tauri::process::CommandEvent::Stderr(line) = event {
-        log::warn!("backend: {}", line);
-      }
+    if cfg!(debug_assertions) {
+        let python =
+            std::env::var("EASY_PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
+        Command::new(python)
+            .args([
+                "-m",
+                "uvicorn",
+                "api.server:app",
+                "--host",
+                host,
+                "--port",
+                &port.to_string(),
+            ])
+            .spawn()?;
+    } else {
+        let backend_path = resolve_backend_path()?;
+        Command::new(backend_path)
+            .env("EASY_API_HOST", host)
+            .env("EASY_API_PORT", port.to_string())
+            .spawn()?;
     }
-  });
 
-  app.manage(api_base.clone());
-  Ok(api_base)
+    app.manage(api_base.clone());
+    Ok(api_base)
+}
+
+fn resolve_backend_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Ok(path) = std::env::var("EASY_BACKEND_PATH") {
+        return Ok(PathBuf::from(path));
+    }
+
+    let exe = std::env::current_exe()?;
+    let resources_dir = exe
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("Resources"))
+        .ok_or("Unable to resolve app Resources directory")?;
+
+    let target = env!("TAURI_ENV_TARGET_TRIPLE");
+    let candidate = resources_dir.join("bin").join(format!("backend-{target}"));
+    Ok(candidate)
 }
