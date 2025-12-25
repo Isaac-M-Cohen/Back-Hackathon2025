@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PYTHON_BIN="${PYTHON_BIN:-/opt/homebrew/Caskroom/miniconda/base/envs/qt/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/webui/src-tauri/bin"
 WORK_DIR="$ROOT_DIR/build/tauri_backend"

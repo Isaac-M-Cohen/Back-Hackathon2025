@@ -106,12 +106,7 @@ be the single source of context when resetting a session.
 
 ## Current working context (session-specific)
 - OS/IDE: macOS (Apple Silicon), using PyCharm; run configs live in `.idea/workspace.xml`.
-- Primary interpreter (working): `/Users/isaaccohen/.conda/envs/Back-Hackathon2025/bin/python`.
-- Alternate interpreter used earlier: `/opt/homebrew/Caskroom/miniconda/base/envs/qt/bin/python` (Qt works there too).
-- The `.idea` configs were patched to point to the Back-Hackathon2025 conda env:
-  - `.idea/misc.xml` uses `Python 3.11 (Back-Hackathon2025)`
-  - `.idea/workspace.xml` run configs `Backend` + `NativeWindow` set `SDK_HOME` to the conda env path.
-- If PyCharm still runs the wrong env, restart PyCharm so it reloads `.idea` changes.
+- Ensure PyCharm points to the active Python 3.11 interpreter you want to use.
 
 ## Recent UI changes
 - `ui/main_window.py` replaced with an "Enhanced" UI that matches the web UI styling.
@@ -128,11 +123,8 @@ be the single source of context when resetting a session.
 - Optional icon for bundle: `ui/assets/icons/easy.icns` (if present).
 
 ## Dependency setup notes
-- The Back-Hackathon2025 conda env was repaired:
-  - Upgraded `pip`/`setuptools` to fix `_distutils_hack`.
-  - Installed `joblib`.
-  - Installed project deps via `pip install -e .` (pyproject.toml).
+- Install project deps via `pip install -e .` (pyproject.toml).
 
 ## Known run commands
-- Run desktop app (conda env): `/Users/isaaccohen/.conda/envs/Back-Hackathon2025/bin/python main.py`
+- Run desktop app: `python main.py`
 - Build macOS app bundle: `scripts/build_macos_app.sh`
