@@ -500,11 +500,6 @@ class EasyWindow(QtWidgets.QMainWindow):
         header.addWidget(self.run_btn)
         layout.addLayout(header)
 
-        build_stamp = QtWidgets.QLabel(_build_stamp())
-        build_stamp.setObjectName("BuildStamp")
-        build_stamp.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(build_stamp)
-
         layout.addSpacing(24)
 
         self.error_banner = QtWidgets.QFrame()
@@ -573,6 +568,11 @@ class EasyWindow(QtWidgets.QMainWindow):
         card_layout.addWidget(self.add_btn)
 
         layout.addWidget(card)
+        build_stamp = QtWidgets.QLabel(_build_stamp())
+        build_stamp.setObjectName("BuildStamp")
+        build_stamp.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(build_stamp)
+
         layout.addStretch()
         self.setCentralWidget(central)
 
