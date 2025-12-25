@@ -8,7 +8,14 @@ cd webui
 npm install
 npm run dev     # start dev server
 npm run build   # production build
+npm run tauri:dev   # desktop app (dev)
+npm run tauri:build # desktop app (bundle)
 ```
+
+## Tauri (desktop wrapper)
+- Requires Rust toolchain: https://rustup.rs
+- `npm run tauri:dev` starts Vite and launches the desktop shell.
+- `npm run tauri:build` produces native bundles under `webui/src-tauri/target/`.
 
 ## Expected backend endpoints
 - `GET /gestures` → `{ items: [{ label, hotkey? }] }`
