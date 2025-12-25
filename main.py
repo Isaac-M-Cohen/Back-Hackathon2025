@@ -53,7 +53,7 @@ def _run_tauri(command: str = "tauri:dev") -> None:
         raise RuntimeError(f"Missing webui directory at {webui_dir}")
 
     env = os.environ.copy()
-    env.setdefault("EASY_PYTHON_BIN", sys.executable)
+    env["EASY_PYTHON_BIN"] = sys.executable
     cargo_bin = str(Path.home() / ".cargo" / "bin")
     if cargo_bin not in env.get("PATH", ""):
         env["PATH"] = f"{cargo_bin}:{env.get('PATH', '')}"

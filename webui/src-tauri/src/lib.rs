@@ -48,6 +48,10 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
     if cfg!(debug_assertions) {
         let python =
             std::env::var("EASY_PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
+        println!("[easy] using python backend: {}", python);
+        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
         Command::new(python)
             .args([
                 "-m",
@@ -58,6 +62,7 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
                 "--port",
                 &port.to_string(),
             ])
+            .current_dir(repo_root)
             .spawn()?;
     } else {
         let backend_path = resolve_backend_path()?;
