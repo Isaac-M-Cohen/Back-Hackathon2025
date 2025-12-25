@@ -257,6 +257,11 @@ QLabel#BuildStamp {
     color: #94a3b8;
     font-size: 11px;
 }
+
+QStatusBar {
+    background: transparent;
+    border: none;
+}
 """
 
 _APP_SETTINGS = load_json("config/app_settings.json")
@@ -568,13 +573,14 @@ class EasyWindow(QtWidgets.QMainWindow):
         card_layout.addWidget(self.add_btn)
 
         layout.addWidget(card)
-        build_stamp = QtWidgets.QLabel(_build_stamp())
-        build_stamp.setObjectName("BuildStamp")
-        build_stamp.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(build_stamp)
-
         layout.addStretch()
         self.setCentralWidget(central)
+
+        status = self.statusBar()
+        status.setSizeGripEnabled(False)
+        build_stamp = QtWidgets.QLabel(_build_stamp())
+        build_stamp.setObjectName("BuildStamp")
+        status.addPermanentWidget(build_stamp, 1)
 
     def _show_error(self, message: str) -> None:
         if message:
