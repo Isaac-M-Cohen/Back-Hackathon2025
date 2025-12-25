@@ -24,6 +24,8 @@ Build the backend binary used by the Tauri bundle:
 scripts/build_tauri_backend.sh
 ```
 
+Note: `tauri:dev` uses a dev config and does not require a bundled backend binary.
+
 ## Expected backend endpoints
 - `GET /gestures` → `{ items: [{ label, hotkey? }] }`
 - `POST /gestures/static` → `{ label, target_frames }` (opens camera to collect static samples)
