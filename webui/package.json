@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "TAURI_CONFIG=src-tauri/tauri.dev.conf.json tauri dev",
+    "tauri:dev": "TAURI_CONFIG_PATH=src-tauri/tauri.dev.conf.json tauri dev",
     "tauri:build": "tauri build"
   },
   "dependencies": {
