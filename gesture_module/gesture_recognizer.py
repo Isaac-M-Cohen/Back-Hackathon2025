@@ -65,15 +65,21 @@ class RealTimeGestureRecognizer:
         tracking_conf = float(cfg.get("min_tracking_confidence", cfg.get("tracking_threshold", 0.6)))
         device_index = int(cfg.get("device_index", 0))
 
+        mp_solutions = getattr(mp, "solutions", None)
+        if mp_solutions is None:
+            raise RuntimeError(
+                "MediaPipe is missing 'solutions'. Install mediapipe>=0.10 in the active interpreter."
+            )
+
         self.stream = VideoStream(device_index=device_index)
-        self._hands = mp.solutions.hands.Hands(
+        self._hands = mp_solutions.hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
             min_detection_confidence=detection_conf,
             min_tracking_confidence=tracking_conf,
             model_complexity=1,
         )
-        self._drawer = mp.solutions.drawing_utils
+        self._drawer = mp_solutions.drawing_utils
         self.active = False
         self._stop_event = threading.Event()
         self._closed = False

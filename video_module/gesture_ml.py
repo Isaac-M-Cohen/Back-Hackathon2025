@@ -330,9 +330,14 @@ class GestureCollector:
         self.window_size = window_size
         self.mirror_left = mirror_left
         self.show_preview = show_preview
+        mp_solutions = getattr(mp, "solutions", None)
+        if mp_solutions is None:
+            raise RuntimeError(
+                "MediaPipe is missing 'solutions'. Install mediapipe>=0.10 in the active interpreter."
+            )
         self.stream = VideoStream(device_index)
-        self._drawer = mp.solutions.drawing_utils
-        self._hands = mp.solutions.hands.Hands(
+        self._drawer = mp_solutions.drawing_utils
+        self._hands = mp_solutions.hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
             min_detection_confidence=detection_confidence,

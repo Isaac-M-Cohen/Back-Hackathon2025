@@ -115,6 +115,12 @@ QPushButton#PrimaryButton:pressed {
     background: #1d4ed8;
 }
 
+QPushButton#PrimaryButton[highlight="true"] {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+}
+
 QPushButton#DangerButton {
     background: #fef2f2;
     color: #dc2626;
@@ -529,6 +535,13 @@ class EasyWindow(QtWidgets.QMainWindow):
 
         layout.addSpacing(16)
 
+        self.stack = QtWidgets.QStackedWidget()
+
+        self.main_page = QtWidgets.QWidget()
+        main_layout = QtWidgets.QVBoxLayout(self.main_page)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         card = QtWidgets.QFrame()
         card.setObjectName("MainCard")
         card_layout = QtWidgets.QVBoxLayout(card)
@@ -568,11 +581,20 @@ class EasyWindow(QtWidgets.QMainWindow):
 
         self.add_btn = QtWidgets.QPushButton("+ Add Gesture")
         self.add_btn.setObjectName("PrimaryButton")
+        self.add_btn.setProperty("highlight", "false")
         self.add_btn.setFixedHeight(48)
         self.add_btn.clicked.connect(self._add_gesture_flow)
         card_layout.addWidget(self.add_btn)
 
-        layout.addWidget(card)
+        main_layout.addWidget(card)
+
+        self.add_page = self._build_add_page()
+
+        self.stack.addWidget(self.main_page)
+        self.stack.addWidget(self.add_page)
+        self.stack.setCurrentWidget(self.main_page)
+
+        layout.addWidget(self.stack)
         layout.addStretch()
         self.setCentralWidget(central)
 
@@ -581,6 +603,80 @@ class EasyWindow(QtWidgets.QMainWindow):
         build_stamp = QtWidgets.QLabel(_build_stamp())
         build_stamp.setObjectName("BuildStamp")
         status.addPermanentWidget(build_stamp, 1)
+
+    def _build_add_page(self) -> QtWidgets.QWidget:
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        title = QtWidgets.QLabel("Add Gesture")
+        title.setObjectName("TitleLabel")
+        layout.addWidget(title)
+
+        hint = QtWidgets.QLabel("Choose a preset, set a hotkey, then collect samples.")
+        hint.setStyleSheet("color: #64748b; font-size: 13px;")
+        layout.addWidget(hint)
+
+        self.add_preset_list = QtWidgets.QListWidget()
+        self.add_preset_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.SingleSelection
+        )
+        for preset in PRESET_GESTURES:
+            item = QtWidgets.QListWidgetItem(preset.name)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, preset)
+            self.add_preset_list.addItem(item)
+        self.add_preset_list.currentItemChanged.connect(self._update_add_preset)
+        layout.addWidget(self.add_preset_list)
+
+        hotkey_label = QtWidgets.QLabel("Hotkey")
+        hotkey_label.setStyleSheet("color: #64748b; font-size: 13px;")
+        layout.addWidget(hotkey_label)
+
+        self.add_key_edit = QtWidgets.QKeySequenceEdit()
+        self.add_key_edit.setMinimumHeight(48)
+        self.add_key_edit.keySequenceChanged.connect(self._update_add_hotkey)
+        layout.addWidget(self.add_key_edit)
+
+        mode_label = QtWidgets.QLabel("Collection Mode")
+        mode_label.setStyleSheet("color: #64748b; font-size: 13px;")
+        layout.addWidget(mode_label)
+
+        mode_row = QtWidgets.QHBoxLayout()
+        mode_row.setSpacing(12)
+        self.add_static_radio = QtWidgets.QRadioButton("Static")
+        self.add_dynamic_radio = QtWidgets.QRadioButton("Dynamic")
+        self.add_static_radio.setChecked(True)
+        self.add_static_radio.toggled.connect(
+            lambda checked: self._set_add_mode("static", checked)
+        )
+        self.add_dynamic_radio.toggled.connect(
+            lambda checked: self._set_add_mode("dynamic", checked)
+        )
+        mode_row.addWidget(self.add_static_radio)
+        mode_row.addWidget(self.add_dynamic_radio)
+        mode_row.addStretch()
+        layout.addLayout(mode_row)
+
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.addStretch()
+        cancel_btn = QtWidgets.QPushButton("Back")
+        cancel_btn.setFixedWidth(100)
+        cancel_btn.clicked.connect(self._show_main_page)
+        self.add_confirm_btn = QtWidgets.QPushButton("Start Collection")
+        self.add_confirm_btn.setObjectName("PrimaryButton")
+        self.add_confirm_btn.setFixedWidth(160)
+        self.add_confirm_btn.setEnabled(False)
+        self.add_confirm_btn.clicked.connect(self._confirm_add_gesture)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(self.add_confirm_btn)
+        layout.addLayout(button_row)
+
+        self._add_selected_preset: PresetGesture | None = None
+        self._add_hotkey: str = ""
+        self._add_mode: str = "static"
+
+        return page
 
     def _show_error(self, message: str) -> None:
         if message:
@@ -601,6 +697,11 @@ class EasyWindow(QtWidgets.QMainWindow):
             self._poll_timer.stop()
             self.detection_banner.hide()
             self._set_run_button_state(False)
+            return
+
+        if not self.workflow.dataset.list_gestures():
+            self.error_signal.emit("Add a gesture before starting recognition.")
+            self._nudge_add_button()
             return
 
         try:
@@ -672,18 +773,8 @@ class EasyWindow(QtWidgets.QMainWindow):
 
     def _add_gesture_flow(self) -> None:
         self._show_error("")
-        dialog = PresetDialog(PRESET_GESTURES, self)
-        if dialog.exec() != QtWidgets.QDialog.Accepted or not dialog.selected_preset:
-            return
-
-        preset = dialog.selected_preset
-        hotkey_dialog = HotkeyDialog(preset, self)
-        if hotkey_dialog.exec() != QtWidgets.QDialog.Accepted:
-            return
-        if not hotkey_dialog.hotkey:
-            return
-
-        self._run_collection(preset, hotkey_dialog.hotkey, hotkey_dialog.mode)
+        self._reset_add_page()
+        self.stack.setCurrentWidget(self.add_page)
 
     def _run_collection(self, preset: PresetGesture, hotkey: str, mode: str) -> None:
         self.busy_signal.emit(True)
@@ -707,6 +798,7 @@ class EasyWindow(QtWidgets.QMainWindow):
                 self.workflow.dataset.save()
                 self.workflow.train_and_save()
                 self.refresh_signal.emit()
+                self._show_main_page()
             except Exception as exc:
                 self.error_signal.emit(str(exc))
             finally:
@@ -714,6 +806,57 @@ class EasyWindow(QtWidgets.QMainWindow):
 
         thread = threading.Thread(target=_worker, name="GestureCollection", daemon=True)
         thread.start()
+
+    def _show_main_page(self) -> None:
+        self.stack.setCurrentWidget(self.main_page)
+
+    def _update_add_preset(
+        self,
+        current: QtWidgets.QListWidgetItem | None,
+        _previous: QtWidgets.QListWidgetItem | None,
+    ) -> None:
+        if current:
+            self._add_selected_preset = current.data(QtCore.Qt.ItemDataRole.UserRole)
+        else:
+            self._add_selected_preset = None
+        self._update_add_confirm_state()
+
+    def _update_add_hotkey(self, seq: QtGui.QKeySequence) -> None:
+        self._add_hotkey = seq.toString(QtGui.QKeySequence.NativeText)
+        self._update_add_confirm_state()
+
+    def _set_add_mode(self, mode: str, checked: bool) -> None:
+        if checked:
+            self._add_mode = mode
+
+    def _update_add_confirm_state(self) -> None:
+        can_confirm = bool(self._add_selected_preset and self._add_hotkey)
+        self.add_confirm_btn.setEnabled(can_confirm)
+
+    def _confirm_add_gesture(self) -> None:
+        if not self._add_selected_preset or not self._add_hotkey:
+            return
+        self._run_collection(self._add_selected_preset, self._add_hotkey, self._add_mode)
+
+    def _reset_add_page(self) -> None:
+        self.add_preset_list.clearSelection()
+        self.add_key_edit.clear()
+        self.add_static_radio.setChecked(True)
+        self._add_selected_preset = None
+        self._add_hotkey = ""
+        self._add_mode = "static"
+        self._update_add_confirm_state()
+
+    def _nudge_add_button(self) -> None:
+        self.add_btn.setProperty("highlight", "true")
+        self.add_btn.style().unpolish(self.add_btn)
+        self.add_btn.style().polish(self.add_btn)
+        QtCore.QTimer.singleShot(1500, self._clear_add_button_highlight)
+
+    def _clear_add_button_highlight(self) -> None:
+        self.add_btn.setProperty("highlight", "false")
+        self.add_btn.style().unpolish(self.add_btn)
+        self.add_btn.style().polish(self.add_btn)
 
 
 class MainWindow:
