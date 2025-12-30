@@ -13,6 +13,7 @@ from video_module import (
     VideoStream,
 )
 from gesture_module.gesture_recognizer import RealTimeGestureRecognizer
+from pathlib import Path
 
 
 class GestureWorkflow:
@@ -25,6 +26,32 @@ class GestureWorkflow:
         self.trainer = GestureTrainer(window_size=window_size)
         self._recognizer: RealTimeGestureRecognizer | None = None
         self._last_detection: dict | None = None
+        self.ensure_presets_loaded()
+
+    def ensure_presets_loaded(self) -> bool:
+        """Ensure preset samples are loaded and a model is trained."""
+        if self.dataset.load_model() is not None and self.dataset.labels:
+            return True
+        keypoint_csv = Path("data/presets/keypoint.csv")
+        label_csv = Path("data/presets/keypoint_classifier_label.csv")
+        if not keypoint_csv.exists() or not label_csv.exists():
+            return False
+        try:
+            from scripts.import_preset_gestures import import_keypoints
+        except Exception:
+            return False
+        try:
+            import_keypoints(
+                keypoint_csv,
+                label_csv,
+                self.dataset,
+                window_size=self.window_size,
+            )
+            artifacts = self.trainer.train(self.dataset)
+            self.dataset.save_model(artifacts)
+            return True
+        except Exception:
+            return False
 
     def collect_static(self, label: str, target_frames: int = 60, *, show_preview: bool = False) -> None:
         collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
@@ -72,6 +99,7 @@ class GestureWorkflow:
             stable_frames=stable_frames,
             show_window=show_window,
             on_detection=self._record_detection,
+            enabled_labels=set(self.dataset.enabled),
         )
         self._recognizer.start()
 
@@ -84,6 +112,10 @@ class GestureWorkflow:
 
     def is_recognizing(self) -> bool:
         return bool(self._recognizer and self._recognizer.is_running())
+
+    def refresh_enabled_labels(self) -> None:
+        if self._recognizer:
+            self._recognizer.set_enabled_labels(set(self.dataset.enabled))
 
     def _record_detection(self, *, label: str, confidence: float) -> None:
         self._last_detection = {

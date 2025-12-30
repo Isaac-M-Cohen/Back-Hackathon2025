@@ -35,11 +35,13 @@ class RealTimeGestureRecognizer:
         show_window: bool = False,
         on_detection: Optional[callable] = None,
         emit_cooldown_secs: float = 0.5,
+        enabled_labels: Optional[set[str]] = None,
     ) -> None:
         self.controller = controller
         self.show_window = show_window
         self.on_detection = on_detection
         self.emit_cooldown_secs = emit_cooldown_secs
+        self.enabled_labels = enabled_labels
         self._thread: Optional[threading.Thread] = None
         self._window_name = "Gesture Recognition"
         cfg = load_json(config_path)
@@ -147,7 +149,11 @@ class RealTimeGestureRecognizer:
                 else:
                     label, confidence = self.recognizer.observe(None)
 
-                if label != "NONE":
+                if label != "NONE" and not self._is_enabled(label):
+                    label = "NONE"
+                    confidence = 0.0
+
+                if label != "NONE" and self._is_enabled(label):
                     now = time.monotonic()
                     should_emit = (
                         label != self._last_emitted_label
@@ -187,7 +193,12 @@ class RealTimeGestureRecognizer:
     def stop(self) -> None:
         self.active = False
         self._stop_event.set()
-        self._cleanup(join_thread=True)
+        if self._thread and self._thread.is_alive() and threading.current_thread() is not self._thread:
+            self._thread.join(timeout=5)
+        if self._thread and self._thread.is_alive():
+            print("[GESTURE] Recognition stop timed out; thread still running")
+            return
+        self._cleanup(join_thread=False)
         print("[GESTURE] Recognition stopped")
 
     def _cleanup(self, join_thread: bool) -> None:
@@ -195,11 +206,12 @@ class RealTimeGestureRecognizer:
             return
         self.active = False
         self.stream.close()
-        try:
-            self._hands.close()
-        except ValueError:
-            # MediaPipe may already be closed; ignore.
-            pass
+        if self._hands:
+            try:
+                self._hands.close()
+            except Exception:
+                # MediaPipe may already be closed; ignore.
+                pass
         self._closed = True
         if self.show_window:
             cv2.destroyAllWindows()
@@ -209,3 +221,11 @@ class RealTimeGestureRecognizer:
 
     def is_running(self) -> bool:
         return bool((self._thread and self._thread.is_alive()) or self.active)
+
+    def _is_enabled(self, label: str) -> bool:
+        if not self.enabled_labels:
+            return False
+        return label in self.enabled_labels
+
+    def set_enabled_labels(self, labels: set[str]) -> None:
+        self.enabled_labels = labels

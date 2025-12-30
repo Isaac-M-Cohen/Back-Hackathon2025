@@ -1,6 +1,7 @@
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use tauri::{Emitter, Manager, Wry};
 
@@ -72,8 +73,27 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
             .spawn()?;
     }
 
+    wait_for_backend(host, port, Duration::from_secs(10))?;
     app.manage(api_base.clone());
     Ok(api_base)
+}
+
+fn wait_for_backend(
+    host: &str,
+    port: u16,
+    timeout: Duration,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let addr: SocketAddr = format!("{host}:{port}").parse()?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err("Backend did not start in time".into());
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 fn resolve_backend_path() -> Result<PathBuf, Box<dyn std::error::Error>> {

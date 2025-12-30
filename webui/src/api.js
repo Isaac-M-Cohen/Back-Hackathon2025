@@ -15,9 +15,28 @@ export async function initApiBase() {
     await listen("easy://api-base", (event) => {
       setApiBase(event.payload);
     });
+    if (typeof window !== "undefined" && window.__EASY_API_BASE__) {
+      setApiBase(window.__EASY_API_BASE__);
+    }
   } catch {
     // Tauri APIs not available (web dev mode).
   }
+}
+
+export async function waitForApiReady({ timeoutMs = 8000, intervalMs = 200 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${apiBase}/status`);
+      if (res.ok) {
+        return true;
+      }
+    } catch {
+      // Backend still starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error("Backend is still starting. Please wait a moment and retry.");
 }
 
 async function request(path, options = {}) {
@@ -65,6 +84,9 @@ export const Api = {
   async stopRecognition() {
     return request("/recognition/stop", { method: "POST" });
   },
+  async status() {
+    return request("/status");
+  },
   async lastDetection() {
     return request("/recognition/last");
   },
@@ -73,5 +95,14 @@ export const Api = {
       method: "POST",
       body: JSON.stringify({ label }),
     });
+  },
+  async enableGesture(label, enabled = true) {
+    return request("/gestures/enable", {
+      method: "POST",
+      body: JSON.stringify({ label, enabled }),
+    });
+  },
+  async listPresetGestures() {
+    return request("/gestures/presets");
   },
 };

@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause } from "lucide-react";
-import { Api, initApiBase } from "./api";
-
-const PRESET_GESTURES = [
-  { id: "thumbs_up", name: "Thumbs Up", duration: 1.2 },
-  { id: "peace_sign", name: "Peace Sign", duration: 1.0 },
-  { id: "wave", name: "Wave", duration: 1.5 },
-  { id: "fist", name: "Closed Fist", duration: 1.0 },
-  { id: "open_palm", name: "Open Palm", duration: 1.0 },
-  { id: "point_up", name: "Point Up", duration: 1.0 },
-  { id: "swipe_left", name: "Swipe Left", duration: 1.3 },
-  { id: "swipe_right", name: "Swipe Right", duration: 1.3 },
-];
+import { Api, initApiBase, waitForApiReady } from "./api";
 
 export default function GestureControlApp() {
   const [gestures, setGestures] = useState([]);
+  const [allGestures, setAllGestures] = useState([]);
+  const [presetGestures, setPresetGestures] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
-  const [showHotkeyModal, setShowHotkeyModal] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
@@ -25,9 +15,24 @@ export default function GestureControlApp() {
   const [lastDetection, setLastDetection] = useState(null);
 
   useEffect(() => {
-    initApiBase().then(() => {
-      refreshGestures().catch((err) => setError(err.message));
+    initApiBase().then(async () => {
+      try {
+        await waitForApiReady();
+        await refreshGestures();
+      } catch (err) {
+        setError(err.message);
+      }
     });
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        refreshGestures().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   useEffect(() => {
@@ -41,6 +46,10 @@ export default function GestureControlApp() {
         if (res && res.label) {
           setLastDetection(res);
         }
+        const status = await Api.status();
+        if (status && status.recognition_running === false) {
+          setIsRunning(false);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -51,51 +60,62 @@ export default function GestureControlApp() {
   async function refreshGestures() {
     try {
       const data = await Api.listGestures();
-      setGestures(
+      const items =
         data.items?.map((item) => ({
           id: item.label,
           gesture: { id: item.label, name: item.label },
           hotkey: item.hotkey || "",
-        })) || []
+          enabled: item.enabled || false,
+        })) || [];
+      setAllGestures(items);
+      setGestures(
+        items.filter((item) => item.enabled && item.id !== "NONE")
       );
     } catch (err) {
       setError(err.message);
     }
   }
 
+  async function refreshPresets() {
+    try {
+      const data = await Api.listPresetGestures();
+      const items =
+        data.items?.map((item) => ({
+          id: item.label,
+          name: item.label,
+        })) || [];
+      setPresetGestures(items);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   const handleAddGesture = () => {
-    setShowPresets(true);
+    refreshPresets().finally(() => setShowPresets(true));
   };
 
   const handlePresetSelect = (preset) => {
     setSelectedPreset(preset);
     setShowPresets(false);
-    setShowHotkeyModal(true);
   };
 
-  const handleHotkeySubmit = async (hotkey, mode = "static") => {
-    if (hotkey && selectedPreset) {
-      try {
-        if (mode === "static") {
-          await Api.addStaticGesture(selectedPreset.id, 60, hotkey);
-        } else {
-          await Api.addDynamicGesture(selectedPreset.id, 6, 25, hotkey);
-        }
-        await Api.train();
-        await refreshGestures();
-      } catch (err) {
-        setError(err.message);
-      }
-      setShowHotkeyModal(false);
-      setSelectedPreset(null);
+  const handlePresetConfirm = async () => {
+    if (!selectedPreset) {
+      return;
     }
+    try {
+      await Api.enableGesture(selectedPreset.id, true);
+      await refreshGestures();
+    } catch (err) {
+      setError(err.message);
+    }
+    setSelectedPreset(null);
   };
 
   const handleDelete = async (id) => {
     setMenuOpen(null);
     try {
-      await Api.deleteGesture(id);
-      await Api.train();
+      await Api.enableGesture(id, false);
       await refreshGestures();
     } catch (err) {
       setError(err.message);
@@ -105,8 +125,14 @@ export default function GestureControlApp() {
   const toggleRecognition = async () => {
     try {
       if (isRunning) {
-        await Api.stopRecognition();
-        setIsRunning(false);
+        try {
+          await Api.stopRecognition();
+        } finally {
+          setIsRunning(false);
+          setLastDetection(null);
+          refreshGestures().catch(() => {});
+          refreshPresets().catch(() => {});
+        }
       } else {
         await Api.startRecognition({
           confidence_threshold: 0.6,
@@ -117,6 +143,10 @@ export default function GestureControlApp() {
       }
     } catch (err) {
       setError(err.message || "Failed to start/stop recognition. Collect and train first?");
+      if (isRunning) {
+        setIsRunning(false);
+        setLastDetection(null);
+      }
     }
   };
 
@@ -228,6 +258,12 @@ export default function GestureControlApp() {
                           <Trash2 size={14} />
                           Delete
                         </button>
+                        <button
+                          onClick={() => setMenuOpen(null)}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          Edit
+                        </button>
                       </div>
                     )}
                   </div>
@@ -247,37 +283,45 @@ export default function GestureControlApp() {
       </div>
 
       {showPresets && (
-        <PresetModal onSelect={handlePresetSelect} onClose={() => setShowPresets(false)} />
+        <PresetModal
+          presets={presetGestures.filter(
+            (preset) =>
+              !allGestures.some(
+                (item) => item.id === preset.id && item.enabled
+              )
+          )}
+          onSelect={handlePresetSelect}
+          onClose={() => setShowPresets(false)}
+        />
       )}
 
-      {showHotkeyModal && (
-        <HotkeyModal
+      {selectedPreset && (
+        <ConfirmModal
           preset={selectedPreset}
-          onSubmit={handleHotkeySubmit}
-          onCancel={() => {
-            setShowHotkeyModal(false);
-            setSelectedPreset(null);
-          }}
+          onConfirm={handlePresetConfirm}
+          onCancel={() => setSelectedPreset(null)}
         />
       )}
     </div>
   );
 }
 
-function PresetModal({ onSelect, onClose }) {
+function PresetModal({ presets, onSelect, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-8 z-50">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-light mb-6">Choose a Gesture</h2>
         <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
-          {PRESET_GESTURES.map((preset) => (
+          {presets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onSelect(preset)}
               className="p-4 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all text-left"
             >
               <div className="w-full h-16 bg-gray-200 rounded mb-2 flex items-center justify-center">
-                <span className="text-xs text-gray-500">{preset.name.split(" ")[0]}</span>
+                <span className="text-xs text-gray-500">
+                  {preset.name.split(" ")[0]}
+                </span>
               </div>
               <p className="text-sm text-gray-700">{preset.name}</p>
             </button>
@@ -294,70 +338,16 @@ function PresetModal({ onSelect, onClose }) {
   );
 }
 
-function HotkeyModal({ onSubmit, onCancel, preset }) {
-  const [hotkey, setHotkey] = useState("");
-  const [mode, setMode] = useState("static");
-
-  const handleKeyDown = (e) => {
-    e.preventDefault();
-    const keys = [];
-    if (e.ctrlKey) keys.push("Ctrl");
-    if (e.shiftKey) keys.push("Shift");
-    if (e.altKey) keys.push("Alt");
-    if (e.metaKey) keys.push("Cmd");
-
-    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-    if (!["Control", "Shift", "Alt", "Meta"].includes(key)) {
-      keys.push(key);
-    }
-
-    if (keys.length > 0) {
-      setHotkey(keys.join("+"));
-    }
-  };
-
+function ConfirmModal({ preset, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-8 z-50">
       <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
-        <h2 className="text-xl font-light mb-4">Assign Hotkey</h2>
+        <h2 className="text-xl font-light mb-4">Enable Gesture</h2>
         {preset && (
-          <p className="text-sm text-gray-600 mb-2">
-            Gesture: <span className="font-medium">{preset.name}</span>
+          <p className="text-sm text-gray-600 mb-4">
+            Add <span className="font-medium">{preset.name}</span> to your active list?
           </p>
         )}
-        <p className="text-sm text-gray-600 mb-4">Press the key combination you want to use</p>
-
-        <div
-          onKeyDown={handleKeyDown}
-          tabIndex={0}
-          className="w-full p-4 border-2 border-gray-300 rounded-lg mb-4 text-center focus:border-blue-500 focus:outline-none cursor-text"
-        >
-          {hotkey ? (
-            <span className="text-lg font-medium text-gray-800">{hotkey}</span>
-          ) : (
-            <span className="text-gray-400">Press keys...</span>
-          )}
-        </div>
-
-        <div className="flex gap-3 mb-4">
-          <button
-            onClick={() => setMode("static")}
-            className={`flex-1 py-2 px-4 rounded-lg border ${
-              mode === "static" ? "bg-blue-50 border-blue-400 text-blue-700" : "bg-gray-100"
-            }`}
-          >
-            Static
-          </button>
-          <button
-            onClick={() => setMode("dynamic")}
-            className={`flex-1 py-2 px-4 rounded-lg border ${
-              mode === "dynamic" ? "bg-blue-50 border-blue-400 text-blue-700" : "bg-gray-100"
-            }`}
-          >
-            Dynamic
-          </button>
-        </div>
-
         <div className="flex gap-3">
           <button
             onClick={onCancel}
@@ -366,9 +356,8 @@ function HotkeyModal({ onSubmit, onCancel, preset }) {
             Cancel
           </button>
           <button
-            onClick={() => onSubmit(hotkey, mode)}
-            disabled={!hotkey}
-            className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            onClick={onConfirm}
+            className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             Confirm
           </button>

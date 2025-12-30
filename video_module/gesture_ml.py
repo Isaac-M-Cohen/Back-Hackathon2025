@@ -120,10 +120,12 @@ class GestureDataset:
         self.labels_path = self.base_dir / "labels.json"
         self.model_path = self.base_dir / "model.pkl"
         self.hotkeys_path = self.base_dir / "hotkeys.json"
+        self.enabled_path = self.base_dir / "enabled_gestures.json"
 
         self.labels: list[str] = []
         self.label_to_idx: dict[str, int] = {}
         self.hotkeys: dict[str, str] = {}
+        self.enabled: set[str] = set()
         self.X: np.ndarray | None = None
         self.y: np.ndarray | None = None
         self._load_metadata()
@@ -143,6 +145,14 @@ class GestureDataset:
                 self.hotkeys = {}
         else:
             self.hotkeys = {}
+        if self.enabled_path.exists():
+            try:
+                items = json.loads(self.enabled_path.read_text())
+                self.enabled = {str(lbl) for lbl in items}
+            except json.JSONDecodeError:
+                self.enabled = set()
+        else:
+            self.enabled = set()
 
     def _load_arrays(self) -> None:
         if self.X_path.exists() and self.y_path.exists():
@@ -177,6 +187,7 @@ class GestureDataset:
         np.save(self.y_path, self.y.astype(np.int64))
         self.labels_path.write_text(json.dumps(self.labels, indent=2))
         self.hotkeys_path.write_text(json.dumps(self.hotkeys, indent=2))
+        self.enabled_path.write_text(json.dumps(sorted(self.enabled), indent=2))
 
     def save_model(self, artifacts: ModelArtifacts) -> None:
         joblib.dump(
@@ -193,7 +204,14 @@ class GestureDataset:
         return ModelArtifacts(model=blob["model"], labels=labels, label_to_idx=label_to_idx)
 
     def list_gestures(self) -> list[dict]:
-        return [{"label": lbl, "hotkey": self.hotkeys.get(lbl, "")} for lbl in self.labels]
+        return [
+            {
+                "label": lbl,
+                "hotkey": self.hotkeys.get(lbl, ""),
+                "enabled": lbl in self.enabled,
+            }
+            for lbl in self.labels
+        ]
 
     def set_hotkey(self, label: str, hotkey: str | None) -> None:
         if hotkey:
@@ -201,6 +219,16 @@ class GestureDataset:
         elif label in self.hotkeys:
             self.hotkeys.pop(label, None)
         self.hotkeys_path.write_text(json.dumps(self.hotkeys, indent=2))
+
+    def set_enabled(self, label: str, enabled: bool) -> None:
+        if enabled:
+            self.enabled.add(label)
+        else:
+            self.enabled.discard(label)
+        self.enabled_path.write_text(json.dumps(sorted(self.enabled), indent=2))
+
+    def is_enabled(self, label: str) -> bool:
+        return label in self.enabled
 
     def remove_label(self, label: str) -> None:
         """Remove all samples for a label and renumber class indices."""
@@ -225,6 +253,7 @@ class GestureDataset:
         self.labels = new_labels
         self.label_to_idx = {lbl: i for i, lbl in enumerate(self.labels)}
         self.hotkeys.pop(label, None)
+        self.enabled.discard(label)
         self.save()
 
     def build_none_only_artifacts(self, window_size: int = 30) -> ModelArtifacts:

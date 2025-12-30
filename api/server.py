@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from typing import Optional
+import csv
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -20,17 +22,12 @@ workflow = GestureWorkflow(user_id=USER_ID)
 
 app = FastAPI(title="Gesture Control API", version="0.1.0")
 
-# Allow local dev origins (Vite, etc.)
-_origins = {
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:1573",
-    "http://127.0.0.1:1573",
-}
+# Allow local dev origins (Vite, Tauri webview, etc.)
+_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(_origins),
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,6 +50,11 @@ class DeleteGestureRequest(BaseModel):
     label: str
 
 
+class EnableGestureRequest(BaseModel):
+    label: str
+    enabled: bool = True
+
+
 class StartRecognitionRequest(BaseModel):
     confidence_threshold: float = Field(default=0.6, ge=0, le=1)
     stable_frames: int = Field(default=5, ge=1, le=30)
@@ -61,7 +63,22 @@ class StartRecognitionRequest(BaseModel):
 
 @app.get("/gestures")
 def list_gestures():
+    workflow.ensure_presets_loaded()
     return {"items": workflow.dataset.list_gestures()}
+
+
+@app.get("/gestures/presets")
+def list_preset_gestures():
+    labels_path = Path("data/presets/keypoint_classifier_label.csv")
+    if not labels_path.exists():
+        return {"items": []}
+    labels: list[str] = []
+    with labels_path.open() as fh:
+        for row in csv.reader(fh):
+            if not row:
+                continue
+            labels.append(row[0].lstrip("\ufeff").strip())
+    return {"items": [{"label": lbl} for lbl in labels if lbl]}
 
 
 @app.post("/gestures/static")
@@ -91,6 +108,14 @@ def delete_gesture(req: DeleteGestureRequest):
     return {"status": "ok"}
 
 
+@app.post("/gestures/enable")
+def enable_gesture(req: EnableGestureRequest):
+    workflow.ensure_presets_loaded()
+    workflow.dataset.set_enabled(req.label, req.enabled)
+    workflow.refresh_enabled_labels()
+    return {"status": "ok"}
+
+
 @app.post("/train")
 def train():
     if workflow.dataset.X is None or workflow.dataset.y is None:
@@ -102,6 +127,7 @@ def train():
 @app.post("/recognition/start")
 def start_recognition(req: StartRecognitionRequest):
     try:
+        workflow.ensure_presets_loaded()
         workflow.start_recognition(
             controller,
             confidence_threshold=req.confidence_threshold,
@@ -119,8 +145,8 @@ def stop_recognition():
     try:
         workflow.stop_recognition()
     except Exception as exc:
-        # Prevent a crash from propagating to the UI; log and return error.
-        raise HTTPException(status_code=500, detail=str(exc))
+        # Prevent a crash from propagating to the UI; log and return ok.
+        print(f"[API] Failed to stop recognition: {exc}")
     return {"status": "ok"}
 
 
