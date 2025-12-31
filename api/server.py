@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Optional, Any
 import csv
 from pathlib import Path
 
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from command_controller.controller import CommandController
 from gesture_module.workflow import GestureWorkflow
+from utils.file_utils import load_json
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
 
@@ -56,8 +57,8 @@ class EnableGestureRequest(BaseModel):
 
 
 class StartRecognitionRequest(BaseModel):
-    confidence_threshold: float = Field(default=0.6, ge=0, le=1)
-    stable_frames: int = Field(default=5, ge=1, le=30)
+    confidence_threshold: Optional[float] = Field(default=None, ge=0, le=1)
+    stable_frames: Optional[int] = Field(default=None, ge=1, le=30)
     show_window: bool = False
 
 
@@ -79,6 +80,30 @@ def list_preset_gestures():
                 continue
             labels.append(row[0].lstrip("\ufeff").strip())
     return {"items": [{"label": lbl} for lbl in labels if lbl]}
+
+
+@app.get("/settings")
+def get_settings():
+    return load_json("config/app_settings.json")
+
+
+@app.post("/settings")
+def update_settings(payload: dict[str, Any]):
+    settings = load_json("config/app_settings.json")
+    allowed = {
+        "ui_poll_interval_ms",
+        "recognition_stable_frames",
+        "recognition_emit_cooldown_ms",
+        "recognition_confidence_threshold",
+    }
+    updates = {key: value for key, value in payload.items() if key in allowed}
+    if not updates:
+        return {"status": "ok", "settings": settings}
+    settings.update(updates)
+    from utils.file_utils import save_json
+
+    save_json("config/app_settings.json", settings)
+    return {"status": "ok", "settings": settings}
 
 
 @app.post("/gestures/static")
@@ -127,11 +152,21 @@ def train():
 @app.post("/recognition/start")
 def start_recognition(req: StartRecognitionRequest):
     try:
+        settings = load_json("config/app_settings.json")
+        stable_frames = req.stable_frames or int(settings.get("recognition_stable_frames", 5))
+        emit_cooldown_ms = int(settings.get("recognition_emit_cooldown_ms", 500))
+        emit_cooldown_secs = max(0.0, emit_cooldown_ms / 1000.0)
+        confidence_threshold = (
+            req.confidence_threshold
+            if req.confidence_threshold is not None
+            else float(settings.get("recognition_confidence_threshold", 0.6))
+        )
         workflow.ensure_presets_loaded()
         workflow.start_recognition(
             controller,
-            confidence_threshold=req.confidence_threshold,
-            stable_frames=req.stable_frames,
+            confidence_threshold=confidence_threshold,
+            stable_frames=stable_frames,
+            emit_cooldown_secs=emit_cooldown_secs,
             show_window=req.show_window,
         )
     except RuntimeError as exc:

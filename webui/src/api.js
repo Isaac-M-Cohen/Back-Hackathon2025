@@ -105,4 +105,13 @@ export const Api = {
   async listPresetGestures() {
     return request("/gestures/presets");
   },
+  async getSettings() {
+    return request("/settings");
+  },
+  async updateSettings(values) {
+    return request("/settings", {
+      method: "POST",
+      body: JSON.stringify(values || {}),
+    });
+  },
 };

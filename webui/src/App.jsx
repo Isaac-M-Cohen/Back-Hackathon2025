@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, MoreVertical, Trash2, Play, Pause } from "lucide-react";
+import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
 export default function GestureControlApp() {
@@ -13,12 +13,26 @@ export default function GestureControlApp() {
   const [menuOpen, setMenuOpen] = useState(null);
   const [error, setError] = useState("");
   const [lastDetection, setLastDetection] = useState(null);
+  const [pollIntervalMs, setPollIntervalMs] = useState(1000);
+  const [settings, setSettings] = useState({});
+  const [settingsDraft, setSettingsDraft] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     initApiBase().then(async () => {
       try {
         await waitForApiReady();
         await refreshGestures();
+        try {
+          const settings = await Api.getSettings();
+          const nextPoll = Number(settings.ui_poll_interval_ms);
+          if (!Number.isNaN(nextPoll) && nextPoll > 0) {
+            setPollIntervalMs(nextPoll);
+          }
+          setSettings(settings);
+        } catch {
+          // Settings are optional.
+        }
         try {
           const { emit } = await import("@tauri-apps/api/event");
           await emit("easy://frontend-ready");
@@ -59,9 +73,9 @@ export default function GestureControlApp() {
       } catch (err) {
         console.error(err);
       }
-    }, 1000);
+    }, pollIntervalMs);
     return () => clearInterval(id);
-  }, [isRunning]);
+  }, [isRunning, pollIntervalMs]);
 
   async function refreshGestures() {
     try {
@@ -140,11 +154,7 @@ export default function GestureControlApp() {
           refreshPresets().catch(() => {});
         }
       } else {
-        await Api.startRecognition({
-          confidence_threshold: 0.6,
-          stable_frames: 5,
-          show_window: false,
-        });
+        await Api.startRecognition({ show_window: false });
         setIsRunning(true);
       }
     } catch (err) {
@@ -156,22 +166,78 @@ export default function GestureControlApp() {
     }
   };
 
+  const openSettings = async () => {
+    try {
+      const next = await Api.getSettings();
+      setSettings(next);
+      setSettingsDraft({
+        ui_poll_interval_ms: next.ui_poll_interval_ms ?? 1000,
+        recognition_stable_frames: next.recognition_stable_frames ?? 5,
+        recognition_emit_cooldown_ms: next.recognition_emit_cooldown_ms ?? 500,
+        recognition_confidence_threshold: next.recognition_confidence_threshold ?? 0.6,
+      });
+    } catch (err) {
+      setError(err.message);
+      setSettingsDraft({
+        ui_poll_interval_ms: 1000,
+        recognition_stable_frames: 5,
+        recognition_emit_cooldown_ms: 500,
+        recognition_confidence_threshold: 0.6,
+      });
+    }
+    setShowSettings(true);
+  };
+
+  const closeSettings = () => {
+    setShowSettings(false);
+    setSettingsDraft(null);
+  };
+
+  const saveSettings = async () => {
+    if (!settingsDraft) {
+      return;
+    }
+    try {
+      const res = await Api.updateSettings(settingsDraft);
+      if (res && res.settings) {
+        setSettings(res.settings);
+        const nextPoll = Number(res.settings.ui_poll_interval_ms);
+        if (!Number.isNaN(nextPoll) && nextPoll > 0) {
+          setPollIntervalMs(nextPoll);
+        }
+      }
+      closeSettings();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
       <div className="w-full max-w-2xl">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-light text-gray-800">Gesture Control</h1>
-          <button
-            onClick={toggleRecognition}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-              isRunning
-                ? "bg-green-500 text-white hover:bg-green-600"
-                : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-            }`}
-          >
-            {isRunning ? <Pause size={16} /> : <Play size={16} />}
-            {isRunning ? "Running" : "Stopped"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openSettings}
+              className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings size={18} />
+            </button>
+            <button
+              onClick={toggleRecognition}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                isRunning
+                  ? "bg-green-500 text-white hover:bg-green-600"
+                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+              }`}
+            >
+              {isRunning ? <Pause size={16} /> : <Play size={16} />}
+              {isRunning ? "Running" : "Stopped"}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -308,6 +374,15 @@ export default function GestureControlApp() {
           onCancel={() => setSelectedPreset(null)}
         />
       )}
+
+      {showSettings && settingsDraft && (
+        <SettingsModal
+          values={settingsDraft}
+          onChange={setSettingsDraft}
+          onSave={saveSettings}
+          onClose={closeSettings}
+        />
+      )}
     </div>
   );
 }
@@ -366,6 +441,88 @@ function ConfirmModal({ preset, onConfirm, onCancel }) {
             className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ values, onChange, onSave, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-6 z-50">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Settings</h2>
+        <div className="space-y-4">
+          <label className="block text-sm text-gray-700">
+            UI poll interval (ms)
+            <input
+              type="number"
+              min="100"
+              step="50"
+              value={values.ui_poll_interval_ms}
+              onChange={(e) =>
+                onChange({ ...values, ui_poll_interval_ms: Number(e.target.value) })
+              }
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm text-gray-700">
+            Recognition stable frames
+            <input
+              type="number"
+              min="1"
+              max="30"
+              value={values.recognition_stable_frames}
+              onChange={(e) =>
+                onChange({ ...values, recognition_stable_frames: Number(e.target.value) })
+              }
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm text-gray-700">
+            Emit cooldown (ms)
+            <input
+              type="number"
+              min="0"
+              step="50"
+              value={values.recognition_emit_cooldown_ms}
+              onChange={(e) =>
+                onChange({ ...values, recognition_emit_cooldown_ms: Number(e.target.value) })
+              }
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm text-gray-700">
+            Confidence threshold
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={values.recognition_confidence_threshold}
+              onChange={(e) =>
+                onChange({
+                  ...values,
+                  recognition_confidence_threshold: Number(e.target.value),
+                })
+              }
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white hover:bg-gray-800"
+          >
+            Save
           </button>
         </div>
       </div>

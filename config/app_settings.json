@@ -1,6 +1,11 @@
 {
+  "app_name": "easy",
   "theme": "light",
   "language": "en",
   "log_level": "INFO",
-  "auto_start": false
+  "auto_start": false,
+  "ui_poll_interval_ms": 1000,
+  "recognition_confidence_threshold": 0.6,
+  "recognition_stable_frames": 5,
+  "recognition_emit_cooldown_ms": 500
 }

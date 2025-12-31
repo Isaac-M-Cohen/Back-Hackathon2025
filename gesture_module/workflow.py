@@ -86,6 +86,7 @@ class GestureWorkflow:
         *,
         confidence_threshold: float = 0.6,
         stable_frames: int = 5,
+        emit_cooldown_secs: float = 0.5,
         show_window: bool = True,
     ) -> None:
         """Open the camera and start realtime recognition."""
@@ -99,6 +100,7 @@ class GestureWorkflow:
             stable_frames=stable_frames,
             show_window=show_window,
             on_detection=self._record_detection,
+            emit_cooldown_secs=emit_cooldown_secs,
             enabled_labels=set(self.dataset.enabled),
         )
         self._recognizer.start()
