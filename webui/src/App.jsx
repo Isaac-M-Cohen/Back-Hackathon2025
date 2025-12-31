@@ -19,6 +19,12 @@ export default function GestureControlApp() {
       try {
         await waitForApiReady();
         await refreshGestures();
+        try {
+          const { emit } = await import("@tauri-apps/api/event");
+          await emit("easy://frontend-ready");
+        } catch {
+          // Tauri APIs not available (web dev mode).
+        }
       } catch (err) {
         setError(err.message);
       }

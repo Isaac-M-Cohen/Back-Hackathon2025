@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use tauri::{Emitter, Manager, Wry};
+use tauri::{Emitter, Listener, Manager, Wry};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +19,15 @@ pub fn run() {
 
       let api_base = spawn_backend(app)?;
       app.emit("easy://api-base", api_base.clone())?;
+
+      let app_handle = app.handle().clone();
+      let app_handle_for_event = app_handle.clone();
+      app_handle.listen("easy://frontend-ready", move |_| {
+        if let Some(window) = app_handle_for_event.get_webview_window("main") {
+          let _ = window.show();
+          let _ = window.set_focus();
+        }
+      });
 
       if let Some(window) = app.get_webview_window("main") {
         let script = format!(
