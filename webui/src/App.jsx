@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
@@ -17,6 +17,7 @@ export default function GestureControlApp() {
   const [settings, setSettings] = useState({});
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [themeMode, setThemeMode] = useState("light");
 
   useEffect(() => {
     initApiBase().then(async () => {
@@ -30,6 +31,9 @@ export default function GestureControlApp() {
             setPollIntervalMs(nextPoll);
           }
           setSettings(settings);
+          if (settings.theme) {
+            setThemeMode(settings.theme);
+          }
         } catch {
           // Settings are optional.
         }
@@ -44,6 +48,24 @@ export default function GestureControlApp() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const isDark = themeMode === "dark" || (themeMode === "system" && media.matches);
+      document.documentElement.classList.toggle("dark", isDark);
+    };
+    applyTheme();
+    if (media.addEventListener) {
+      media.addEventListener("change", applyTheme);
+      return () => media.removeEventListener("change", applyTheme);
+    }
+    media.addListener(applyTheme);
+    return () => media.removeListener(applyTheme);
+  }, [themeMode]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -166,11 +188,12 @@ export default function GestureControlApp() {
     }
   };
 
-  const openSettings = async () => {
+  const openSettings = useCallback(async () => {
     try {
       const next = await Api.getSettings();
       setSettings(next);
       setSettingsDraft({
+        theme: next.theme ?? "light",
         ui_poll_interval_ms: next.ui_poll_interval_ms ?? 1000,
         recognition_stable_frames: next.recognition_stable_frames ?? 5,
         recognition_emit_cooldown_ms: next.recognition_emit_cooldown_ms ?? 500,
@@ -179,6 +202,7 @@ export default function GestureControlApp() {
     } catch (err) {
       setError(err.message);
       setSettingsDraft({
+        theme: "light",
         ui_poll_interval_ms: 1000,
         recognition_stable_frames: 5,
         recognition_emit_cooldown_ms: 500,
@@ -186,7 +210,7 @@ export default function GestureControlApp() {
       });
     }
     setShowSettings(true);
-  };
+  }, []);
 
   const closeSettings = () => {
     setShowSettings(false);
@@ -205,12 +229,34 @@ export default function GestureControlApp() {
         if (!Number.isNaN(nextPoll) && nextPoll > 0) {
           setPollIntervalMs(nextPoll);
         }
+        if (res.settings.theme) {
+          setThemeMode(res.settings.theme);
+        }
       }
       closeSettings();
     } catch (err) {
       setError(err.message);
     }
   };
+
+  useEffect(() => {
+    let unlisten;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("easy://open-settings", () => {
+          openSettings();
+        });
+      } catch {
+        // Tauri APIs not available (web dev mode).
+      }
+    })();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [openSettings]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
@@ -449,11 +495,23 @@ function ConfirmModal({ preset, onConfirm, onCancel }) {
 }
 
 function SettingsModal({ values, onChange, onSave, onClose }) {
+  const isDark = values.theme === "dark";
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-6 z-50">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Settings</h2>
         <div className="space-y-4">
+          <label className="flex items-center justify-between text-sm text-gray-700">
+            Dark mode
+            <input
+              type="checkbox"
+              checked={isDark}
+              onChange={(e) =>
+                onChange({ ...values, theme: e.target.checked ? "dark" : "light" })
+              }
+              className="h-4 w-4"
+            />
+          </label>
           <label className="block text-sm text-gray-700">
             UI poll interval (ms)
             <input

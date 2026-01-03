@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "TAURI_CONFIG_PATH=src-tauri/tauri.build.conf.json tauri build"
+    "tauri:prep-backend": "PYTHON_BIN=${EASY_PYTHON_BIN:-python3} bash ../scripts/build_tauri_backend.sh",
+    "tauri:build": "TAURI_CONFIG_PATH=src-tauri/tauri.build.conf.json tauri build && bash ../scripts/tauri_postbundle.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

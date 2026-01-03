@@ -3,11 +3,34 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Listener, Manager, Wry};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .menu(|handle| {
+      let about_metadata = build_about_metadata();
+      let prefs = MenuItem::with_id(handle, "preferences", "Preferences\u{2026}", true, Some("Cmd+,"));
+      let app_menu = Submenu::with_items(
+        handle,
+        "Easy",
+        true,
+        &[
+          &PredefinedMenuItem::about(handle, None, Some(about_metadata))?,
+          &PredefinedMenuItem::separator(handle)?,
+          &prefs?,
+          &PredefinedMenuItem::separator(handle)?,
+          &PredefinedMenuItem::quit(handle, None)?,
+        ],
+      )?;
+      Menu::with_items(handle, &[&app_menu])
+    })
+    .on_menu_event(|app, event| {
+      if event.id() == "preferences" {
+        let _ = app.emit("easy://open-settings", ());
+      }
+    })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -120,4 +143,47 @@ fn resolve_backend_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let target = env!("TAURI_ENV_TARGET_TRIPLE");
     let candidate = resources_dir.join("bin").join(format!("backend-{target}"));
     Ok(candidate)
+}
+
+fn build_about_metadata() -> AboutMetadata<'static> {
+    let pkg_version = env!("CARGO_PKG_VERSION");
+    let (commit_count, branch) = git_version_info();
+    let version = match (commit_count, branch) {
+        (Some(count), Some(branch)) => format!("{pkg_version} ({count} commits, {branch})"),
+        _ => pkg_version.to_string(),
+    };
+    let summary = "Easy lets you control your computer with simple hand gestures, \
+making everyday actions feel natural and effortless.";
+
+    AboutMetadata {
+        name: Some("Easy".to_string()),
+        version: Some(version),
+        short_version: Some(pkg_version.to_string()),
+        copyright: Some("© 2025 Easy".to_string()),
+        credits: Some(summary.to_string()),
+        ..Default::default()
+    }
+}
+
+fn git_version_info() -> (Option<String>, Option<String>) {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..");
+    let commit_count = Command::new("git")
+        .args(["rev-list", "--count", "HEAD"])
+        .current_dir(&repo_root)
+        .output()
+        .ok()
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&repo_root)
+        .output()
+        .ok()
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    (commit_count, branch)
 }

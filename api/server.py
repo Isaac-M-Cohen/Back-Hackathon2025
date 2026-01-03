@@ -91,6 +91,7 @@ def get_settings():
 def update_settings(payload: dict[str, Any]):
     settings = load_json("config/app_settings.json")
     allowed = {
+        "theme",
         "ui_poll_interval_ms",
         "recognition_stable_frames",
         "recognition_emit_cooldown_ms",

@@ -22,6 +22,9 @@ fi
   --noconfirm \
   --clean \
   --onefile \
+  --paths "$ROOT_DIR" \
+  --hidden-import api \
+  --hidden-import api.server \
   --name "backend-${TARGET_TRIPLE}" \
   --distpath "$OUT_DIR" \
   --workpath "$WORK_DIR" \
