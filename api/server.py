@@ -96,6 +96,8 @@ def update_settings(payload: dict[str, Any]):
         "recognition_stable_frames",
         "recognition_emit_cooldown_ms",
         "recognition_confidence_threshold",
+        "microphone_device_index",
+        "speaker_device_index",
     }
     updates = {key: value for key, value in payload.items() if key in allowed}
     if not updates:
@@ -105,6 +107,37 @@ def update_settings(payload: dict[str, Any]):
 
     save_json("config/app_settings.json", settings)
     return {"status": "ok", "settings": settings}
+
+
+@app.get("/audio/devices")
+def list_audio_devices():
+    try:
+        import pyaudio
+    except ImportError:
+        return {"inputs": [], "outputs": []}
+
+    pa = pyaudio.PyAudio()
+    inputs: list[dict[str, Any]] = []
+    outputs: list[dict[str, Any]] = []
+    try:
+        device_count = pa.get_device_count()
+        for index in range(device_count):
+            info = pa.get_device_info_by_index(index)
+            item = {
+                "index": index,
+                "name": info.get("name"),
+                "default_sample_rate": info.get("defaultSampleRate"),
+                "max_input_channels": info.get("maxInputChannels", 0),
+                "max_output_channels": info.get("maxOutputChannels", 0),
+            }
+            if item["max_input_channels"] > 0:
+                inputs.append(item)
+            if item["max_output_channels"] > 0:
+                outputs.append(item)
+    finally:
+        pa.terminate()
+
+    return {"inputs": inputs, "outputs": outputs}
 
 
 @app.post("/gestures/static")
