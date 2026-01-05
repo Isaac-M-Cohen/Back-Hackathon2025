@@ -26,7 +26,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "externalBin": [
       "bin/backend"
     ],
