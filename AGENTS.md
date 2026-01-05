@@ -119,3 +119,10 @@ be the single source of context when resetting a session.
 
 ## Known run commands
 - Run desktop app: `python main.py`
+
+## Branching policy
+- Create all new features on a new branch.
+- Create fixes and feature additions on new branches as well.
+- Feature branch names must start with `feat:` (example: `feat:windows-bundling`).
+- Fix branch names must start with `fix:` (example: `fix:gesture-threshold`).
+- Feature additions should use `feat:` even if expanding existing features.
