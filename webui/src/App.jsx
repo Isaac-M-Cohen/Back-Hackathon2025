@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
@@ -19,12 +19,17 @@ export default function GestureControlApp() {
   const [pendingCommands, setPendingCommands] = useState([]);
   const [isBooting, setIsBooting] = useState(true);
   const [bootMessage, setBootMessage] = useState("Starting...");
+  const bootStartedRef = useRef(false);
   const [settings, setSettings] = useState({});
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [themeMode, setThemeMode] = useState("light");
 
   useEffect(() => {
+    if (bootStartedRef.current) {
+      return;
+    }
+    bootStartedRef.current = true;
     initApiBase().then(async () => {
       try {
         await waitForApiReady();
