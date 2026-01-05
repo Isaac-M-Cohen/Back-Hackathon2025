@@ -87,6 +87,9 @@ export const Api = {
   async status() {
     return request("/status");
   },
+  async health() {
+    return request("/health");
+  },
   async lastDetection() {
     return request("/recognition/last");
   },
@@ -104,6 +107,27 @@ export const Api = {
   },
   async listPresetGestures() {
     return request("/gestures/presets");
+  },
+  async setGestureCommand(label, command = "") {
+    return request("/gestures/command", {
+      method: "POST",
+      body: JSON.stringify({ label, command }),
+    });
+  },
+  async listPendingCommands() {
+    return request("/commands/pending");
+  },
+  async confirmCommand(id) {
+    return request("/commands/confirm", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  },
+  async denyCommand(id) {
+    return request("/commands/deny", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   },
   async getSettings() {
     return request("/settings");

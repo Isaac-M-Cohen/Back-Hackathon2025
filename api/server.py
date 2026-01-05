@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import os
+import platform
+import subprocess
+import time
+from urllib import request as urlrequest
+from urllib.error import URLError
 from typing import Optional, Any
 import csv
 from pathlib import Path
@@ -17,8 +22,12 @@ from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
+OLLAMA_URL = os.getenv("EASY_OLLAMA_URL", "http://127.0.0.1:11434")
+OLLAMA_BIN = os.getenv("EASY_OLLAMA_BIN", "ollama")
+OLLAMA_AUTOSTART = os.getenv("EASY_OLLAMA_AUTOSTART", "1") == "1"
+_OLLAMA_CHECKED = False
 
-controller = CommandController()
+controller = CommandController(user_id=USER_ID)
 workflow = GestureWorkflow(user_id=USER_ID)
 
 app = FastAPI(title="Gesture Control API", version="0.1.0")
@@ -54,6 +63,11 @@ class DeleteGestureRequest(BaseModel):
 class EnableGestureRequest(BaseModel):
     label: str
     enabled: bool = True
+
+
+class SetGestureCommandRequest(BaseModel):
+    label: str
+    command: str = ""
 
 
 class StartRecognitionRequest(BaseModel):
@@ -142,6 +156,14 @@ def enable_gesture(req: EnableGestureRequest):
     return {"status": "ok"}
 
 
+@app.post("/gestures/command")
+def set_gesture_command(req: SetGestureCommandRequest):
+    workflow.ensure_presets_loaded()
+    workflow.dataset.set_command(req.label, req.command)
+    controller.dataset.set_command(req.label, req.command)
+    return {"status": "ok"}
+
+
 @app.post("/train")
 def train():
     if workflow.dataset.X is None or workflow.dataset.y is None:
@@ -200,6 +222,82 @@ def root():
 def last_detection():
     det = workflow.last_detection()
     return det or {}
+
+
+def _ollama_ready(timeout_secs: float = 2.0) -> tuple[bool, str | None]:
+    try:
+        with urlrequest.urlopen(f"{OLLAMA_URL.rstrip('/')}/api/tags", timeout=timeout_secs) as resp:
+            if resp.status == 200:
+                return True, None
+    except URLError as exc:
+        return False, str(exc)
+    return False, "Unexpected response"
+
+
+def _try_start_ollama() -> bool:
+    if not OLLAMA_AUTOSTART:
+        return False
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.Popen(["open", "-a", "Ollama"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif system == "Windows":
+            creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            subprocess.Popen(
+                [OLLAMA_BIN, "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags,
+            )
+        else:
+            subprocess.Popen([OLLAMA_BIN, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        return False
+    for _ in range(12):
+        ready, _ = _ollama_ready(timeout_secs=1.0)
+        if ready:
+            return True
+        time.sleep(0.5)
+    return False
+
+
+@app.get("/health")
+def health():
+    global _OLLAMA_CHECKED
+    print("[HEALTH] /health check requested")
+    ready, err = _ollama_ready()
+    if not ready and not _OLLAMA_CHECKED:
+        _OLLAMA_CHECKED = True
+        _try_start_ollama()
+        ready, err = _ollama_ready()
+    return {
+        "ok": ready,
+        "ollama": {
+            "running": ready,
+            "url": OLLAMA_URL,
+            "error": err,
+        },
+        "recognition_running": workflow.is_recognizing(),
+    }
+
+
+@app.get("/commands/pending")
+def list_pending_commands():
+    return {"items": controller.list_pending()}
+
+
+class CommandConfirmationRequest(BaseModel):
+    id: str
+
+
+@app.post("/commands/confirm")
+def confirm_command(req: CommandConfirmationRequest):
+    return controller.approve(req.id)
+
+
+@app.post("/commands/deny")
+def deny_command(req: CommandConfirmationRequest):
+    return controller.deny(req.id)
 
 
 if __name__ == "__main__":
