@@ -123,6 +123,9 @@ be the single source of context when resetting a session.
 ## Branching policy
 - Create all new features on a new branch.
 - Create fixes and feature additions on new branches as well.
-- Feature branch names must start with `feat:` (example: `feat:windows-bundling`).
-- Fix branch names must start with `fix:` (example: `fix:gesture-threshold`).
-- Feature additions should use `feat:` even if expanding existing features.
+- Feature branches: `feature/<short-description>` or `feat/<ticket-id>-<summary>`.
+- Bug fix branches: `fix/<ticket-id>-<summary>` or `bugfix/<short-description>`.
+- Hotfix branches: `hotfix/<issue-id>-<summary>`.
+- Experiments/spikes: `spike/<summary>` or `experiment/<summary>`.
+- Refactoring branches: `refactor/<area>`.
+- Release branches: `release/<version>`.
