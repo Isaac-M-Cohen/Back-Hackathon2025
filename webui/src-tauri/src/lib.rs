@@ -105,7 +105,7 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
             .spawn()?;
     }
 
-    wait_for_backend(host, port, Duration::from_secs(10))?;
+    wait_for_backend(host, port, Duration::from_secs(20))?;
     app.manage(api_base.clone());
     Ok(api_base)
 }
@@ -138,7 +138,8 @@ fn resolve_backend_path(app: &tauri::App<Wry>) -> Result<PathBuf, Box<dyn std::e
         .resource_dir()
         .map_err(|err| format!("Unable to resolve app resources directory: {err}"))?;
 
-    let mut candidate = resources_dir.join("bin").join("backend");
+    let target = env!("TAURI_ENV_TARGET_TRIPLE");
+    let mut candidate = resources_dir.join("bin").join(format!("backend-{target}"));
     if cfg!(target_os = "windows") {
         candidate.set_extension("exe");
     }

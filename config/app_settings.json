@@ -7,5 +7,7 @@
   "ui_poll_interval_ms": 500,
   "recognition_confidence_threshold": 0.6,
   "recognition_stable_frames": 5,
-  "recognition_emit_cooldown_ms": 200
+  "recognition_emit_cooldown_ms": 200,
+  "microphone_device_index": null,
+  "speaker_device_index": null
 }

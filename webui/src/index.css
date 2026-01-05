@@ -11,29 +11,66 @@
   background-color: #f8fafc;
 }
 
+html,
+body {
+  transition: background-color 240ms ease, color 240ms ease;
+}
+
+.bg-gray-50,
+.bg-white,
+.bg-gray-100,
+.bg-gray-200,
+.bg-gray-300,
+.text-gray-900,
+.text-gray-800,
+.text-gray-700,
+.text-gray-600,
+.text-gray-500,
+.border-gray-100,
+.border-gray-200 {
+  transition: background-color 240ms ease, color 240ms ease,
+    border-color 240ms ease;
+}
+
 .dark {
   color: #e2e8f0;
-  background-color: #0b0f17;
+  background-color: #111827;
 }
 
 .dark .bg-gray-50 {
-  background-color: #0b0f17 !important;
-}
-
-.dark .bg-white {
   background-color: #111827 !important;
 }
 
-.dark .bg-gray-100 {
+.dark .bg-white {
   background-color: #1f2937 !important;
 }
 
+.dark .bg-gray-100 {
+  background-color: #273548 !important;
+}
+
 .dark .bg-gray-200 {
-  background-color: #263040 !important;
+  background-color: #2f3b4c !important;
 }
 
 .dark .bg-gray-300 {
-  background-color: #374151 !important;
+  background-color: #3b4758 !important;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #1b2433 !important;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #243144 !important;
+}
+
+.dark .hover\:bg-gray-200:hover {
+  background-color: #2d3a4c !important;
+}
+
+.dark .hover\:bg-gray-300:hover {
+  background-color: #3a485a !important;
 }
 
 .dark .text-gray-900 {

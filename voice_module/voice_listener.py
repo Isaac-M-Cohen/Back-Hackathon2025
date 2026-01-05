@@ -6,6 +6,7 @@ import time
 from typing import AsyncIterable
 
 from command_controller.controller import CommandController
+from utils.file_utils import load_json
 from voice_module.stt_engine import SpeechToTextEngine
 
 
@@ -94,12 +95,14 @@ class VoiceListener:
 
         pa = pyaudio.PyAudio()
         rate = sample_rate or self.stt.default_sample_rate
+        input_device_index = self._resolve_microphone_device_index()
         stream = pa.open(
             format=pyaudio.paInt16,
             channels=1,
             rate=rate,
             input=True,
             frames_per_buffer=chunk_size,
+            input_device_index=input_device_index,
         )
 
         end_time = time.time() + seconds if seconds > 0 else None
@@ -115,6 +118,16 @@ class VoiceListener:
             stream.stop_stream()
             stream.close()
             pa.terminate()
+
+    def _resolve_microphone_device_index(self) -> int | None:
+        settings = load_json("config/app_settings.json")
+        value = settings.get("microphone_device_index")
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     async def listen_and_handle_microphone(
         self, seconds: float = 5.0, chunk_size: int = 4096
