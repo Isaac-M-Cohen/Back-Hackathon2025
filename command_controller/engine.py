@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import platform
 import re
+import time
 from typing import Iterable
 
 from command_controller.confirmations import ConfirmationStore
@@ -32,13 +34,16 @@ class CommandEngine:
         self.confirmations = confirmations or ConfirmationStore()
         self.logger = logger or CommandLogger()
 
-    def run(self, *, source: str, text: str) -> dict:
+    def run(self, *, source: str, text: str, context: dict | None = None) -> dict:
         if not text.strip():
             return {"status": "ignored", "reason": "empty"}
 
         try:
-            payload = self._parse_text(text)
+            start = time.monotonic()
+            payload = self._parse_text(text, context or {})
             steps = validate_steps(normalize_steps(payload))
+            elapsed_ms = (time.monotonic() - start) * 1000.0
+            self.logger.info(f"LLM parse time: {elapsed_ms:.0f} ms")
         except (ValueError, LocalLLMError) as exc:
             self.logger.error(f"Command parse failed: {exc}")
             return {"status": "error", "reason": str(exc)}
@@ -75,8 +80,11 @@ class CommandEngine:
     def list_pending(self) -> list[dict]:
         return [item.to_dict() for item in self.confirmations.list()]
 
-    def _parse_text(self, text: str) -> dict | list:
+    def _parse_text(self, text: str, context: dict) -> dict | list:
         stripped = text.strip()
+        shortcut = self._shortcut_for_text(stripped)
+        if shortcut:
+            return {"steps": [shortcut]}
         if stripped.startswith("{") or stripped.startswith("["):
             try:
                 import json
@@ -84,7 +92,29 @@ class CommandEngine:
                 return json.loads(stripped)
             except json.JSONDecodeError:
                 pass
-        return self.interpreter.interpret(text)
+        return self.interpreter.interpret(text, context)
+
+    def _shortcut_for_text(self, text: str) -> dict | None:
+        normalized = text.lower().strip()
+        if not normalized:
+            return None
+        modifier = "command" if platform.system() == "Darwin" else "ctrl"
+        shortcuts = {
+            "copy": [modifier, "c"],
+            "copy selection": [modifier, "c"],
+            "copy selected text": [modifier, "c"],
+            "paste": [modifier, "v"],
+            "paste selection": [modifier, "v"],
+            "cut": [modifier, "x"],
+            "cut selection": [modifier, "x"],
+            "undo": [modifier, "z"],
+            "redo": [modifier, "shift", "z"] if modifier == "cmd" else [modifier, "y"],
+            "select all": [modifier, "a"],
+        }
+        keys = shortcuts.get(normalized)
+        if not keys:
+            return None
+        return {"intent": "key_combo", "keys": keys}
 
     def _requires_confirmation(self, text: str, steps: Iterable[dict]) -> bool:
         if SENSITIVE_PATTERNS.search(text):

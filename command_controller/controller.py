@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from command_controller.context import get_context
 from command_controller.engine import CommandEngine
 from command_controller.logger import CommandLogger
 from video_module.gesture_ml import GestureDataset
@@ -28,8 +29,27 @@ class CommandController:
                 return
         else:
             text = action
-        result = self.engine.run(source=source, text=text)
+        read_selection = not self._is_basic_shortcut(text)
+        context = get_context(read_selection=read_selection)
+        result = self.engine.run(source=source, text=text, context=context)
         self.logger.info(f"Command result: {result.get('status')}")
+
+    def _is_basic_shortcut(self, text: str) -> bool:
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+        return normalized in {
+            "copy",
+            "copy selection",
+            "copy selected text",
+            "paste",
+            "paste selection",
+            "cut",
+            "cut selection",
+            "undo",
+            "redo",
+            "select all",
+        }
 
     def list_pending(self) -> list[dict]:
         return self.engine.list_pending()

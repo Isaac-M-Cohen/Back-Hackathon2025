@@ -155,16 +155,16 @@ class RealTimeGestureRecognizer:
 
                 if label != "NONE" and self._is_enabled(label):
                     now = time.monotonic()
-                    should_emit = (
-                        label != self._last_emitted_label
-                        or (now - self._last_emit_time) >= self.emit_cooldown_secs
-                    )
-                    if should_emit:
+                    in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
+                    if (label != self._last_emitted_label) and not in_cooldown:
                         self.controller.handle_event(
                             source="gesture", action=label, payload={"confidence": confidence}
                         )
                         self._last_emitted_label = label
                         self._last_emit_time = now
+                if label == "NONE":
+                    self._last_emitted_label = None
+                    self._last_emit_time = 0.0
                 if self.on_detection:
                     try:
                         # Always record detections, including NONE, for UI status.
