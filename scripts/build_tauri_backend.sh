@@ -31,8 +31,13 @@ fi
   --specpath "$WORK_DIR" \
   "$ROOT_DIR/scripts/tauri_backend.py"
 
-if [[ -f "$OUT_DIR/backend-${TARGET_TRIPLE}" ]]; then
-  chmod +x "$OUT_DIR/backend-${TARGET_TRIPLE}" || true
+BACKEND_PATH="$OUT_DIR/backend-${TARGET_TRIPLE}"
+if [[ -f "$OUT_DIR/backend-${TARGET_TRIPLE}.exe" ]]; then
+  BACKEND_PATH="$OUT_DIR/backend-${TARGET_TRIPLE}.exe"
 fi
 
-echo "Built Tauri backend sidecar at $OUT_DIR/backend-${TARGET_TRIPLE}"
+if [[ -f "$BACKEND_PATH" ]]; then
+  chmod +x "$BACKEND_PATH" || true
+fi
+
+echo "Built Tauri backend sidecar at $BACKEND_PATH"

@@ -123,17 +123,18 @@ be the single source of context when resetting a session.
 - Uses `APP_NAME` from `config/app_settings.json`, falling back to "Gesture Control".
 - Window icon path uses `ui/assets/icons/<app_name>.png` (lowercase, spaces -> underscores).
 
-## Packaging (macOS .app)
-- PyInstaller setup added:
-  - Spec file: `pyinstaller_easy.spec` (builds `easy.app` and bundles `config/`, `data/presets/`, `ui/assets/`).
-  - Build script: `scripts/build_macos_app.sh` (cds to repo root).
-- Build output: `dist/easy.app`. Signing may warn about resource forks; use:
-  - `xattr -cr dist/easy.app` or `xattr -cr <repo>` before rebuilding if needed.
-- Optional icon for bundle: `ui/assets/icons/easy.icns` (if present).
-
 ## Dependency setup notes
 - Install project deps via `pip install -e .` (pyproject.toml).
 
 ## Known run commands
 - Run desktop app: `python main.py`
-- Build macOS app bundle: `scripts/build_macos_app.sh`
+
+## Branching policy
+- Create all new features on a new branch.
+- Create fixes and feature additions on new branches as well.
+- Feature branches: `feature/<short-description>` or `feat/<ticket-id>-<summary>`.
+- Bug fix branches: `fix/<ticket-id>-<summary>` or `bugfix/<short-description>`.
+- Hotfix branches: `hotfix/<issue-id>-<summary>`.
+- Experiments/spikes: `spike/<summary>` or `experiment/<summary>`.
+- Refactoring branches: `refactor/<area>`.
+- Release branches: `release/<version>`.

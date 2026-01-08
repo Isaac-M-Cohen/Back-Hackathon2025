@@ -144,4 +144,7 @@ export const Api = {
       body: JSON.stringify(values || {}),
     });
   },
+  async listAudioDevices() {
+    return request("/audio/devices");
+  },
 };

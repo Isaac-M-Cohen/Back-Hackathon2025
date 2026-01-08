@@ -98,14 +98,14 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
             .current_dir(repo_root)
             .spawn()?;
     } else {
-        let backend_path = resolve_backend_path()?;
+      let backend_path = resolve_backend_path(app)?;
         Command::new(backend_path)
             .env("EASY_API_HOST", host)
             .env("EASY_API_PORT", port.to_string())
             .spawn()?;
     }
 
-    wait_for_backend(host, port, Duration::from_secs(10))?;
+    wait_for_backend(host, port, Duration::from_secs(20))?;
     app.manage(api_base.clone());
     Ok(api_base)
 }
@@ -128,20 +128,21 @@ fn wait_for_backend(
     }
 }
 
-fn resolve_backend_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn resolve_backend_path(app: &tauri::App<Wry>) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Ok(path) = std::env::var("EASY_BACKEND_PATH") {
         return Ok(PathBuf::from(path));
     }
 
-    let exe = std::env::current_exe()?;
-    let resources_dir = exe
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("Resources"))
-        .ok_or("Unable to resolve app Resources directory")?;
+    let resources_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|err| format!("Unable to resolve app resources directory: {err}"))?;
 
     let target = env!("TAURI_ENV_TARGET_TRIPLE");
-    let candidate = resources_dir.join("bin").join(format!("backend-{target}"));
+    let mut candidate = resources_dir.join("bin").join(format!("backend-{target}"));
+    if cfg!(target_os = "windows") {
+        candidate.set_extension("exe");
+    }
     Ok(candidate)
 }
 

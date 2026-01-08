@@ -9,5 +9,7 @@
   "recognition_stable_frames": 2,
   "recognition_emit_cooldown_ms": 500,
   "enable_commands": false,
-  "recognition_max_fps": 10
+  "recognition_max_fps": 10,
+  "microphone_device_index": null,
+  "speaker_device_index": null
 }

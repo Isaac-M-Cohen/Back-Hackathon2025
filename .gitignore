@@ -21,6 +21,8 @@ webui/.vite/
 webui/package-lock.json
 webui/src-tauri/target/
 webui/src-tauri/bin/
+build/
+dist/
 
 # OS/IDE
 .DS_Store
@@ -30,3 +32,4 @@ webui/src-tauri/bin/
 # Misc
 webui/EndpointsStructure.txt
 user_data/
+data/user_data/

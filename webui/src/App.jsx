@@ -43,6 +43,16 @@ export default function GestureControlApp() {
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [themeMode, setThemeMode] = useState("light");
+  const [audioDevices, setAudioDevices] = useState({ inputs: [], outputs: [] });
+  const defaultSettings = {
+    theme: "light",
+    ui_poll_interval_ms: 500,
+    recognition_stable_frames: 5,
+    recognition_emit_cooldown_ms: 200,
+    recognition_confidence_threshold: 0.6,
+    microphone_device_index: null,
+    speaker_device_index: null,
+  };
 
   useEffect(() => {
     if (bootStartedRef.current) {
@@ -288,21 +298,35 @@ export default function GestureControlApp() {
       const next = await Api.getSettings();
       setSettings(next);
       setSettingsDraft({
-        theme: next.theme ?? "light",
-        ui_poll_interval_ms: next.ui_poll_interval_ms ?? 1000,
-        recognition_stable_frames: next.recognition_stable_frames ?? 5,
-        recognition_emit_cooldown_ms: next.recognition_emit_cooldown_ms ?? 500,
-        recognition_confidence_threshold: next.recognition_confidence_threshold ?? 0.6,
+        theme: next.theme ?? defaultSettings.theme,
+        ui_poll_interval_ms:
+          next.ui_poll_interval_ms ?? defaultSettings.ui_poll_interval_ms,
+        recognition_stable_frames:
+          next.recognition_stable_frames ??
+          defaultSettings.recognition_stable_frames,
+        recognition_emit_cooldown_ms:
+          next.recognition_emit_cooldown_ms ??
+          defaultSettings.recognition_emit_cooldown_ms,
+        recognition_confidence_threshold:
+          next.recognition_confidence_threshold ??
+          defaultSettings.recognition_confidence_threshold,
+        microphone_device_index:
+          next.microphone_device_index ?? defaultSettings.microphone_device_index,
+        speaker_device_index:
+          next.speaker_device_index ?? defaultSettings.speaker_device_index,
       });
     } catch (err) {
       setError(err.message);
-      setSettingsDraft({
-        theme: "light",
-        ui_poll_interval_ms: 1000,
-        recognition_stable_frames: 5,
-        recognition_emit_cooldown_ms: 500,
-        recognition_confidence_threshold: 0.6,
+      setSettingsDraft({ ...defaultSettings });
+    }
+    try {
+      const devices = await Api.listAudioDevices();
+      setAudioDevices({
+        inputs: devices.inputs || [],
+        outputs: devices.outputs || [],
       });
+    } catch {
+      setAudioDevices({ inputs: [], outputs: [] });
     }
     setShowSettings(true);
   }, []);
@@ -372,7 +396,7 @@ export default function GestureControlApp() {
           <div className="flex items-center gap-3">
             <button
               onClick={openSettings}
-              className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300"
+              className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-100"
               aria-label="Settings"
               title="Settings"
             >
@@ -380,7 +404,7 @@ export default function GestureControlApp() {
             </button>
             <button
               onClick={toggleRecognition}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-sm ${
                 isRunning
                   ? "bg-green-500 text-white hover:bg-green-600"
                   : "bg-gray-300 text-gray-700 hover:bg-gray-400"
@@ -517,7 +541,7 @@ export default function GestureControlApp() {
 
           <button
             onClick={handleAddGesture}
-            className="w-full p-4 flex items-center justify-center gap-2 text-gray-500 hover:bg-gray-50 transition-colors border-t border-gray-100"
+            className="w-full p-4 flex items-center justify-center gap-2 text-gray-500 hover:bg-gray-100 transition-colors border-t border-gray-100"
           >
             <Plus size={20} />
             <span className="text-sm font-medium">Add Gesture</span>
@@ -552,6 +576,8 @@ export default function GestureControlApp() {
           onChange={setSettingsDraft}
           onSave={saveSettings}
           onClose={closeSettings}
+          audioDevices={audioDevices}
+          defaultValues={defaultSettings}
         />
       )}
 
@@ -635,91 +661,93 @@ function ConfirmModal({ preset, onConfirm, onCancel }) {
   );
 }
 
-function SettingsModal({ values, onChange, onSave, onClose }) {
+function SettingsModal({
+  values,
+  onChange,
+  onSave,
+  onClose,
+  audioDevices,
+  defaultValues,
+}) {
   const isDark = values.theme === "dark";
+  const micValue = values.microphone_device_index ?? "";
+  const speakerValue = values.speaker_device_index ?? "";
+  const inputDevices = audioDevices?.inputs || [];
+  const outputDevices = audioDevices?.outputs || [];
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-6 z-50">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Settings</h2>
-        <div className="space-y-4">
-          <label className="flex items-center justify-between text-sm text-gray-700">
-            Dark mode
-            <input
-              type="checkbox"
-              checked={isDark}
-              onChange={(e) =>
-                onChange({ ...values, theme: e.target.checked ? "dark" : "light" })
+        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4">
+          <div className="flex items-center justify-between text-sm text-gray-700">
+            <span>Dark mode</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isDark}
+              onClick={() =>
+                onChange({ ...values, theme: isDark ? "light" : "dark" })
               }
-              className="h-4 w-4"
-            />
-          </label>
-          <label className="block text-sm text-gray-700">
-            UI poll interval (ms)
-            <input
-              type="number"
-              min="100"
-              step="50"
-              value={values.ui_poll_interval_ms}
-              onChange={(e) =>
-                onChange({ ...values, ui_poll_interval_ms: Number(e.target.value) })
-              }
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-sm text-gray-700">
-            Recognition stable frames
-            <input
-              type="number"
-              min="1"
-              max="30"
-              value={values.recognition_stable_frames}
-              onChange={(e) =>
-                onChange({ ...values, recognition_stable_frames: Number(e.target.value) })
-              }
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-sm text-gray-700">
-            Emit cooldown (ms)
-            <input
-              type="number"
-              min="0"
-              step="50"
-              value={values.recognition_emit_cooldown_ms}
-              onChange={(e) =>
-                onChange({ ...values, recognition_emit_cooldown_ms: Number(e.target.value) })
-              }
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-sm text-gray-700">
-            Confidence threshold
-            <input
-              type="number"
-              min="0"
-              max="1"
-              step="0.05"
-              value={values.recognition_confidence_threshold}
-              onChange={(e) =>
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isDark ? "bg-gray-800" : "bg-gray-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  isDark ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+          <div>
+            <DeviceSelectSegmented
+              label="Microphone input"
+              value={micValue}
+              devices={inputDevices}
+              onChange={(value) =>
                 onChange({
                   ...values,
-                  recognition_confidence_threshold: Number(e.target.value),
+                  microphone_device_index: value,
                 })
               }
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
-          </label>
+            <div className="mt-3">
+              <DeviceSelectSegmented
+                label="Speaker output"
+                value={speakerValue}
+                devices={outputDevices}
+                onChange={(value) =>
+                  onChange({
+                    ...values,
+                    speaker_device_index: value,
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-3 space-y-4">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Value Settings
+            </p>
+            <ValueSettingsPresets values={values} onChange={onChange} />
+          </div>
         </div>
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
+            onClick={() => onChange({ ...defaultValues })}
+            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-700 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
+          >
+            Reset to defaults
+          </button>
+          <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-700 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={onSave}
-            className="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white hover:bg-gray-800"
+            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-900 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
           >
             Save
           </button>
@@ -762,4 +790,212 @@ function CommandConfirmModal({ item, onApprove, onDeny }) {
       </div>
     </div>
   );
+}
+
+function DeviceSelectSegmented({ label, value, devices, onChange }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [mode, setMode] = useState(
+    value === "" || value === null ? "default" : "pick"
+  );
+  const isDefault = value === "" || value === null;
+  const selected = devices.find((device) => device.index === value);
+  useEffect(() => {
+    setMode(isDefault ? "default" : "pick");
+    if (isDefault) {
+      setShowPicker(false);
+    }
+  }, [isDefault]);
+  return (
+    <div>
+      <label className="block text-sm text-gray-700">{label}</label>
+      <div className="mt-1 rounded-lg border border-gray-300 p-2 text-sm">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("default");
+              setShowPicker(false);
+              onChange(null);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium ${
+              mode === "default"
+                ? "bg-gray-900 text-white"
+                : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Default
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("pick");
+              setShowPicker(true);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium ${
+              mode === "pick"
+                ? "bg-gray-900 text-white"
+                : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Pick device
+          </button>
+          <span className="text-xs text-gray-500">
+            {selected ? selected.name : "System default"}
+          </span>
+        </div>
+        {(showPicker || mode === "pick") && (
+          <div className="mt-2 max-h-28 overflow-y-auto grid grid-cols-1 gap-1">
+            {devices.map((device) => (
+              <button
+                key={device.index}
+                type="button"
+                onClick={() => {
+                  onChange(Number(device.index));
+                  setShowPicker(false);
+                  setMode("pick");
+                }}
+                className={`w-full text-left px-2 py-1 rounded-md text-xs ${
+                  device.index === value
+                    ? "bg-gray-200 text-gray-800"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}
+              >
+                {device.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ValueSettingsPresets({ values, onChange }) {
+  const presets = [
+    {
+      key: "ui_poll_interval_ms",
+      label: "UI poll interval",
+      unit: "ms",
+      min: 100,
+      max: 2000,
+      step: 50,
+      values: [
+        { label: "Fast", value: 250 },
+        { label: "Normal", value: 500 },
+        { label: "Relaxed", value: 1000 },
+      ],
+    },
+    {
+      key: "recognition_stable_frames",
+      label: "Stable frames",
+      unit: "frames",
+      min: 1,
+      max: 30,
+      step: 1,
+      values: [
+        { label: "Low", value: 3 },
+        { label: "Normal", value: 5 },
+        { label: "High", value: 8 },
+      ],
+    },
+    {
+      key: "recognition_emit_cooldown_ms",
+      label: "Emit cooldown",
+      unit: "ms",
+      min: 0,
+      max: 2000,
+      step: 50,
+      values: [
+        { label: "Short", value: 100 },
+        { label: "Normal", value: 200 },
+        { label: "Long", value: 500 },
+      ],
+    },
+    {
+      key: "recognition_confidence_threshold",
+      label: "Confidence threshold",
+      unit: "",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      values: [
+        { label: "Loose", value: 0.4 },
+        { label: "Normal", value: 0.6 },
+        { label: "Strict", value: 0.8 },
+      ],
+    },
+  ];
+  return (
+    <div>
+      <div className="space-y-3">
+        {presets.map((preset) => (
+          <div key={preset.key} className="rounded-lg border border-gray-200 p-2">
+            <div className="flex items-center justify-between text-xs text-gray-600">
+              <span>{preset.label}</span>
+              <span>
+                {values[preset.key]} {preset.unit}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {preset.values.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() =>
+                    onChange({ ...values, [preset.key]: option.value })
+                  }
+                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    values[preset.key] === option.value
+                      ? "bg-gray-900 text-white"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2 rounded-full border border-gray-300 px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...values,
+                      [preset.key]: stepValue(preset, values[preset.key], -1),
+                    })
+                  }
+                  className="h-6 w-6 rounded-full bg-gray-200 text-gray-700 text-xs"
+                >
+                  -
+                </button>
+                <span className="min-w-[52px] text-center text-xs text-gray-700">
+                  {values[preset.key]} {preset.unit}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...values,
+                      [preset.key]: stepValue(preset, values[preset.key], 1),
+                    })
+                  }
+                  className="h-6 w-6 rounded-full bg-gray-200 text-gray-700 text-xs"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function stepValue(preset, current, direction) {
+  const min = preset.min ?? 0;
+  const max = preset.max ?? 1;
+  const step = preset.step ?? 1;
+  const next = Math.min(max, Math.max(min, Number(current) + direction * step));
+  return Number(next.toFixed(2));
 }
