@@ -7,6 +7,7 @@ be the single source of context when resetting a session.
 - Hand + voice control system with gesture ML pipeline, voice STT, and Tauri + React desktop UI.
 - Python entrypoint: `main.py` launches the Tauri desktop app and sets up env loading.
 - FastAPI server for web UI: `api/server.py`.
+- Windows-first target; macOS support is for local development.
 
 ## Project map (what lives where)
 - `main.py`: entrypoint; loads env files, enforces Python 3.11, and launches the Tauri desktop app.
@@ -22,6 +23,7 @@ be the single source of context when resetting a session.
 
 ## Requirements
 - Python 3.11.x (MediaPipe compatibility).
+- Local LLM runtime for command interpretation: Ollama (local-only, no cloud).
 - Optional deps:
   - `python-dotenv` for `env/.env`.
   - `pyaudio` for microphone capture.
@@ -30,7 +32,7 @@ be the single source of context when resetting a session.
 - Node 18+ for the web UI (`webui`).
 
 ## Run
-- Desktop app (Tauri):
+- Desktop app (Tauri, dev on macOS):
   - `python main.py` (runs `npm run tauri:dev` by default)
   - Or `cd webui && npm run tauri:dev`
 - API server:
@@ -62,6 +64,7 @@ be the single source of context when resetting a session.
 
 ## API endpoints (FastAPI)
 - `GET /gestures` → `{ items: [{ label, hotkey? }] }`
+- `POST /gestures/command` → set command text for a gesture
 - `POST /gestures/static` → collect static samples and save hotkey
 - `POST /gestures/dynamic` → collect dynamic samples and save hotkey
 - `POST /gestures/delete` → delete a gesture and its samples
@@ -70,6 +73,10 @@ be the single source of context when resetting a session.
 - `POST /recognition/stop` → stops realtime recognition
 - `GET /recognition/last` → last detection info
 - `GET /status` → recognition status + user id
+- `GET /health` → backend + local LLM readiness
+- `GET /commands/pending` → list pending confirmations
+- `POST /commands/confirm` → approve a pending command
+- `POST /commands/deny` → deny a pending command
 
 ## Desktop UI (Tauri + React)
 - `webui/` provides the desktop UI inside a Tauri shell.

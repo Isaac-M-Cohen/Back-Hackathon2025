@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
@@ -14,6 +14,12 @@ export default function GestureControlApp() {
   const [error, setError] = useState("");
   const [lastDetection, setLastDetection] = useState(null);
   const [pollIntervalMs, setPollIntervalMs] = useState(1000);
+  const [commandDrafts, setCommandDrafts] = useState({});
+  const [editingCommandId, setEditingCommandId] = useState(null);
+  const [pendingCommands, setPendingCommands] = useState([]);
+  const [isBooting, setIsBooting] = useState(true);
+  const [bootMessage, setBootMessage] = useState("Starting...");
+  const bootStartedRef = useRef(false);
   const [settings, setSettings] = useState({});
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -30,9 +36,17 @@ export default function GestureControlApp() {
   };
 
   useEffect(() => {
+    if (bootStartedRef.current) {
+      return;
+    }
+    bootStartedRef.current = true;
     initApiBase().then(async () => {
       try {
         await waitForApiReady();
+        const ready = await waitForDependencies();
+        if (!ready) {
+          setError("Ollama is not running. Please install or start it.");
+        }
         await refreshGestures();
         try {
           const settings = await Api.getSettings();
@@ -53,11 +67,31 @@ export default function GestureControlApp() {
         } catch {
           // Tauri APIs not available (web dev mode).
         }
+        setIsBooting(false);
       } catch (err) {
         setError(err.message);
+        setIsBooting(false);
       }
     });
   }, []);
+
+  async function waitForDependencies({ timeoutMs = 30000, intervalMs = 500 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const health = await Api.health();
+        if (health && health.ok) {
+          setBootMessage("Ready");
+          return true;
+        }
+        setBootMessage("Waiting for Ollama...");
+      } catch {
+        setBootMessage("Waiting for backend...");
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return false;
+  }
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {
@@ -109,6 +143,18 @@ export default function GestureControlApp() {
     return () => clearInterval(id);
   }, [isRunning, pollIntervalMs]);
 
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await Api.listPendingCommands();
+        setPendingCommands(res.items || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 1200);
+    return () => clearInterval(id);
+  }, []);
+
   async function refreshGestures() {
     try {
       const data = await Api.listGestures();
@@ -117,9 +163,19 @@ export default function GestureControlApp() {
           id: item.label,
           gesture: { id: item.label, name: item.label },
           hotkey: item.hotkey || "",
+          command: item.command || "",
           enabled: item.enabled || false,
         })) || [];
       setAllGestures(items);
+      if (!editingCommandId) {
+        setCommandDrafts((prev) => {
+          const next = { ...prev };
+          items.forEach((item) => {
+            next[item.id] = item.command || "";
+          });
+          return next;
+        });
+      }
       setGestures(
         items.filter((item) => item.enabled && item.id !== "NONE")
       );
@@ -172,6 +228,25 @@ export default function GestureControlApp() {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleCommandChange = (id, value) => {
+    setCommandDrafts((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleCommandSave = async (id) => {
+    const command = commandDrafts[id] || "";
+    try {
+      await Api.setGestureCommand(id, command);
+      await refreshGestures();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleCommandBlur = async (id) => {
+    setEditingCommandId(null);
+    await handleCommandSave(id);
   };
 
   const toggleRecognition = async () => {
@@ -282,6 +357,17 @@ export default function GestureControlApp() {
     };
   }, [openSettings]);
 
+  if (isBooting) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm px-8 py-6 text-center">
+          <div className="text-lg font-medium text-gray-900 mb-2">Easy</div>
+          <div className="text-sm text-gray-600">{bootMessage}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
       <div className="w-full max-w-2xl">
@@ -381,6 +467,25 @@ export default function GestureControlApp() {
                           </React.Fragment>
                         ))}
                     </div>
+                    <div className="mt-3">
+                      <label className="text-xs text-gray-500 block mb-1">
+                        Command
+                      </label>
+                      <input
+                        type="text"
+                        value={commandDrafts[item.id] ?? item.command ?? ""}
+                        onChange={(e) => handleCommandChange(item.id, e.target.value)}
+                        onFocus={() => setEditingCommandId(item.id)}
+                        onBlur={() => handleCommandBlur(item.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="Describe the action to run"
+                      />
+                    </div>
                   </div>
 
                   <div className="relative">
@@ -453,6 +558,22 @@ export default function GestureControlApp() {
           onClose={closeSettings}
           audioDevices={audioDevices}
           defaultValues={defaultSettings}
+        />
+      )}
+
+      {pendingCommands.length > 0 && (
+        <CommandConfirmModal
+          item={pendingCommands[0]}
+          onApprove={async () => {
+            await Api.confirmCommand(pendingCommands[0].id);
+            const res = await Api.listPendingCommands();
+            setPendingCommands(res.items || []);
+          }}
+          onDeny={async () => {
+            await Api.denyCommand(pendingCommands[0].id);
+            const res = await Api.listPendingCommands();
+            setPendingCommands(res.items || []);
+          }}
         />
       )}
     </div>
@@ -616,6 +737,41 @@ function SettingsModal({
   );
 }
 
+function CommandConfirmModal({ item, onApprove, onDeny }) {
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-2">
+          Confirm Command
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          {item.reason || "This command needs confirmation before running."}
+        </p>
+        <div className="bg-gray-100 rounded-lg p-3 text-sm text-gray-700 mb-4">
+          <div className="text-xs text-gray-500 mb-1">
+            Source: {item.source}
+          </div>
+          <div className="font-medium">{item.text}</div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onDeny}
+            className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Deny
+          </button>
+          <button
+            onClick={onApprove}
+            className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DeviceSelectSegmented({ label, value, devices, onChange }) {
   const [showPicker, setShowPicker] = useState(false);
   const [mode, setMode] = useState(
@@ -689,6 +845,10 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
       </div>
     </div>
   );

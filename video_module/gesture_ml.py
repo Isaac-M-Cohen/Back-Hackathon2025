@@ -120,11 +120,13 @@ class GestureDataset:
         self.labels_path = self.base_dir / "labels.json"
         self.model_path = self.base_dir / "model.pkl"
         self.hotkeys_path = self.base_dir / "hotkeys.json"
+        self.commands_path = self.base_dir / "commands.json"
         self.enabled_path = self.base_dir / "enabled_gestures.json"
 
         self.labels: list[str] = []
         self.label_to_idx: dict[str, int] = {}
         self.hotkeys: dict[str, str] = {}
+        self.commands: dict[str, str] = {}
         self.enabled: set[str] = set()
         self.X: np.ndarray | None = None
         self.y: np.ndarray | None = None
@@ -145,6 +147,13 @@ class GestureDataset:
                 self.hotkeys = {}
         else:
             self.hotkeys = {}
+        if self.commands_path.exists():
+            try:
+                self.commands = json.loads(self.commands_path.read_text())
+            except json.JSONDecodeError:
+                self.commands = {}
+        else:
+            self.commands = {}
         if self.enabled_path.exists():
             try:
                 items = json.loads(self.enabled_path.read_text())
@@ -187,6 +196,7 @@ class GestureDataset:
         np.save(self.y_path, self.y.astype(np.int64))
         self.labels_path.write_text(json.dumps(self.labels, indent=2))
         self.hotkeys_path.write_text(json.dumps(self.hotkeys, indent=2))
+        self.commands_path.write_text(json.dumps(self.commands, indent=2))
         self.enabled_path.write_text(json.dumps(sorted(self.enabled), indent=2))
 
     def save_model(self, artifacts: ModelArtifacts) -> None:
@@ -208,6 +218,7 @@ class GestureDataset:
             {
                 "label": lbl,
                 "hotkey": self.hotkeys.get(lbl, ""),
+                "command": self.commands.get(lbl, ""),
                 "enabled": lbl in self.enabled,
             }
             for lbl in self.labels
@@ -219,6 +230,13 @@ class GestureDataset:
         elif label in self.hotkeys:
             self.hotkeys.pop(label, None)
         self.hotkeys_path.write_text(json.dumps(self.hotkeys, indent=2))
+
+    def set_command(self, label: str, command: str | None) -> None:
+        if command:
+            self.commands[label] = command
+        elif label in self.commands:
+            self.commands.pop(label, None)
+        self.commands_path.write_text(json.dumps(self.commands, indent=2))
 
     def set_enabled(self, label: str, enabled: bool) -> None:
         if enabled:
@@ -253,6 +271,7 @@ class GestureDataset:
         self.labels = new_labels
         self.label_to_idx = {lbl: i for i, lbl in enumerate(self.labels)}
         self.hotkeys.pop(label, None)
+        self.commands.pop(label, None)
         self.enabled.discard(label)
         self.save()
 
