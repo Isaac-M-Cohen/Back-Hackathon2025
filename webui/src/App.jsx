@@ -2,6 +2,25 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
+function detectClientOs() {
+  if (typeof navigator === "undefined") {
+    return "Unknown";
+  }
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const text = `${platform} ${ua}`.toLowerCase();
+  if (text.includes("mac")) {
+    return "Darwin";
+  }
+  if (text.includes("win")) {
+    return "Windows";
+  }
+  if (text.includes("linux")) {
+    return "Linux";
+  }
+  return "Unknown";
+}
+
 export default function GestureControlApp() {
   const [gestures, setGestures] = useState([]);
   const [allGestures, setAllGestures] = useState([]);
@@ -43,6 +62,7 @@ export default function GestureControlApp() {
     initApiBase().then(async () => {
       try {
         await waitForApiReady();
+        Api.setClientInfo({ os: detectClientOs() }).catch(() => {});
         const ready = await waitForDependencies();
         if (!ready) {
           setError("Ollama is not running. Please install or start it.");
@@ -845,10 +865,6 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
       </div>
     </div>
   );

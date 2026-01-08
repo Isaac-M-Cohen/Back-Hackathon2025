@@ -10,14 +10,17 @@ command_controller/executor.py
 command_controller/logger.py
 gesture_module/__init__.py
 gesture_module/gesture_detector.py
+gesture_module/gesture_recognizer.py
 gesture_module/gesture_utils.py
 gesture_module/hand_tracking.py
+gesture_module/workflow.py
 utils/__init__.py
 utils/event_bus.py
 utils/file_utils.py
 utils/system_utils.py
 utils/threading_utils.py
 video_module/__init__.py
+video_module/gesture_ml.py
 video_module/video_stream.py
 voice_module/__init__.py
 voice_module/stt_engine.py

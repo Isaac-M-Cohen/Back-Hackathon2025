@@ -22,8 +22,8 @@ class LocalLLMInterpreter:
         self.model = os.getenv("EASY_OLLAMA_MODEL", settings.get("ollama_model", "llama3.1:8b"))
         self.timeout_secs = float(settings.get("request_timeout_secs", 30))
 
-    def interpret(self, text: str) -> dict:
-        prompt = self._build_prompt(text)
+    def interpret(self, text: str, context: dict | None = None) -> dict:
+        prompt = self._build_prompt(text, context or {})
         payload = json.dumps(
             {
                 "model": self.model,
@@ -51,7 +51,8 @@ class LocalLLMInterpreter:
             raise LocalLLMError("LLM did not return valid JSON")
         return parsed
 
-    def _build_prompt(self, text: str) -> str:
+    def _build_prompt(self, text: str, context: dict) -> str:
+        context_json = json.dumps(context, ensure_ascii=True)
         return (
             "You are a command intent parser. Convert the user request into JSON only. "
             "Use this schema:\n"
@@ -68,6 +69,8 @@ class LocalLLMInterpreter:
             "- Only output JSON. No markdown, no commentary.\n"
             "- Use the smallest number of steps.\n"
             "- If the request is ambiguous, return an empty steps list.\n"
+            "- For copy/paste/cut/undo/redo/select all, use key_combo with cmd on macOS or ctrl on Windows.\n"
+            f"Context: {context_json}\n"
             f"Request: {text}"
         )
 

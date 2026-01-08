@@ -30,6 +30,7 @@ class Executor:
             return
         if intent == "key_combo":
             keys = step.get("keys", [])
+            print(f"[EXECUTOR] key_combo={keys}")
             self._hotkey(keys)
             return
         if intent == "type_text":
@@ -57,7 +58,23 @@ class Executor:
         if not automation:
             print("[EXECUTOR] pyautogui not available; key_combo skipped")
             return
-        automation.hotkey(*keys)
+        normalized = self._normalize_keys(keys)
+        automation.hotkey(*normalized)
+
+    def _normalize_keys(self, keys: list[str]) -> list[str]:
+        if not keys:
+            return []
+        if sys.platform != "darwin":
+            return keys
+        mapped = []
+        for key in keys:
+            if key == "cmd":
+                mapped.append("command")
+            elif key == "option":
+                mapped.append("alt")
+            else:
+                mapped.append(key)
+        return mapped
 
     def _type_text(self, text: str) -> None:
         automation = self._automation()

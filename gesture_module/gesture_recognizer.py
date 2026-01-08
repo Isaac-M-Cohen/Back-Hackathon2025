@@ -1,25 +1,23 @@
-"""Realtime gesture recognition loop that emits events to the controller.
-
-Uses the gesture ML pipeline from video_module (MediaPipe landmarks only),
-applies temporal smoothing, and forwards recognized labels to CommandController.
-"""
+"""Realtime gesture recognition loop using MediaPipe + TFLite classifiers."""
 
 from __future__ import annotations
 
 import threading
 import time
+from collections import Counter, deque
 from typing import Optional
 
 import cv2
-import mediapipe as mp
-
 from command_controller.controller import CommandController
 from utils.file_utils import load_json
-from video_module import (
-    GestureDataset,
-    GestureRecognizer as MLRecognizer,
-    normalize_landmarks,
-    VideoStream,
+from video_module import GestureDataset, VideoStream
+from video_module.tflite_classifiers import KeyPointClassifier, PointHistoryClassifier
+from video_module.tflite_pipeline import (
+    POINT_HISTORY_LEN,
+    PointHistoryBuffer,
+    calc_landmark_list,
+    pre_process_landmark,
+    pre_process_point_history,
 )
 
 
@@ -36,37 +34,60 @@ class RealTimeGestureRecognizer:
         on_detection: Optional[callable] = None,
         emit_cooldown_secs: float = 0.5,
         enabled_labels: Optional[set[str]] = None,
+        emit_actions: bool = True,
+        max_fps: float = 0.0,
     ) -> None:
         self.controller = controller
         self.show_window = show_window
         self.on_detection = on_detection
         self.emit_cooldown_secs = emit_cooldown_secs
         self.enabled_labels = enabled_labels
+        self.emit_actions = emit_actions
+        self.max_fps = max_fps
+        self.confidence_threshold = confidence_threshold
         self._thread: Optional[threading.Thread] = None
         self._window_name = "Gesture Recognition"
         cfg = load_json(config_path)
 
         dataset = GestureDataset(user_id=user_id)
-        artifacts = dataset.load_model()
-        if artifacts is None:
-            # Build a fallback NONE-only model so recognition can start without training.
-            artifacts = dataset.build_none_only_artifacts(window_size=int(cfg.get("window_size", 30)))
-
-        input_dim = getattr(artifacts.model, "feature_dim", None)
-        if input_dim is None and hasattr(artifacts.model, "coefs_"):
-            input_dim = artifacts.model.coefs_[0].shape[0]
-        self.window_size = input_dim // 63 if input_dim and input_dim % 63 == 0 else int(cfg.get("window_size", 30))
-        self.recognizer = MLRecognizer(
-            artifacts,
-            window_size=self.window_size,
-            confidence_threshold=confidence_threshold,
-            stable_frames=stable_frames,
+        dataset.ensure_presets()
+        self._keypoint_labels = dataset.keypoint_labels()
+        self._point_history_labels = dataset.point_history_labels()
+        self._pointer_id = (
+            self._keypoint_labels.index("Pointer")
+            if "Pointer" in self._keypoint_labels
+            else 2
         )
+        self._keypoint_history = deque(maxlen=stable_frames)
+        self._point_history = PointHistoryBuffer(maxlen=POINT_HISTORY_LEN)
+        self._finger_gesture_history = deque(maxlen=POINT_HISTORY_LEN)
+
+        self._keypoint_classifier = None
+        if dataset.keypoint_model_path.exists():
+            try:
+                self._keypoint_classifier = KeyPointClassifier(dataset.keypoint_model_path)
+            except Exception as exc:
+                print(f"[GESTURE] Failed to load keypoint model: {exc}")
+
+        self._point_history_classifier = None
+        if dataset.point_history_model_path.exists():
+            try:
+                self._point_history_classifier = PointHistoryClassifier(
+                    dataset.point_history_model_path
+                )
+            except Exception as exc:
+                print(f"[GESTURE] Failed to load point history model: {exc}")
 
         detection_conf = float(cfg.get("detection_threshold", 0.6))
         tracking_conf = float(cfg.get("min_tracking_confidence", cfg.get("tracking_threshold", 0.6)))
         device_index = int(cfg.get("device_index", 0))
 
+        try:
+            import mediapipe as mp
+        except ImportError as exc:
+            raise RuntimeError(
+                "MediaPipe is required for recognition. Install mediapipe>=0.10."
+            ) from exc
         mp_solutions = getattr(mp, "solutions", None)
         if mp_solutions is None:
             raise RuntimeError(
@@ -82,6 +103,7 @@ class RealTimeGestureRecognizer:
             model_complexity=1,
         )
         self._drawer = mp_solutions.drawing_utils
+        self._hand_connections = mp_solutions.hands.HAND_CONNECTIONS
         self.active = False
         self._stop_event = threading.Event()
         self._closed = False
@@ -120,55 +142,89 @@ class RealTimeGestureRecognizer:
         print("[GESTURE] Recognition started — press 'q' to exit.")
         try:
             while self.active and not self._stop_event.is_set():
+                loop_start = time.monotonic()
                 ok, frame = self.stream.read()
                 if not ok or frame is None:
                     print("[GESTURE] Failed to read from camera.")
                     break
 
+                frame = cv2.flip(frame, 1)
                 results = self._hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
                 label = "NONE"
                 confidence = 0.0
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
-                    handedness = None
-                    if results.multi_handedness:
-                        handedness = results.multi_handedness[0].classification[0].label
-                    features = normalize_landmarks(
-                        hand_landmarks.landmark,
-                        handedness=handedness,
-                        mirror_left=True,
+                    landmark_list = calc_landmark_list(frame, hand_landmarks)
+                    pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                    keypoint_id = -1
+                    keypoint_score = 0.0
+                    if self._keypoint_classifier:
+                        keypoint_id, keypoint_score = self._keypoint_classifier(
+                            pre_processed_landmark_list
+                        )
+                    if keypoint_id == self._pointer_id:
+                        self._point_history.append(landmark_list[8])
+                    else:
+                        self._point_history.zeros()
+
+                    point_history_list = pre_process_point_history(
+                        frame, self._point_history.as_list()
                     )
-                    label, confidence = self.recognizer.observe(features)
+                    finger_gesture_id = 0
+                    finger_gesture_score = 0.0
+                    if (
+                        self._point_history_classifier
+                        and len(point_history_list) == (POINT_HISTORY_LEN * 2)
+                    ):
+                        finger_gesture_id, finger_gesture_score = self._point_history_classifier(
+                            point_history_list
+                        )
+                    self._finger_gesture_history.append(finger_gesture_id)
+                    most_common_fg = Counter(self._finger_gesture_history).most_common(1)
+                    if most_common_fg:
+                        finger_gesture_id = most_common_fg[0][0]
+
+                    self._keypoint_history.append(keypoint_id)
+                    most_common_keypoint = Counter(self._keypoint_history).most_common(1)
+                    if most_common_keypoint:
+                        keypoint_id = most_common_keypoint[0][0]
+
+                    label, confidence = self._resolve_label(
+                        keypoint_id=keypoint_id,
+                        keypoint_score=keypoint_score,
+                        finger_gesture_id=finger_gesture_id,
+                        finger_gesture_score=finger_gesture_score,
+                    )
 
                     self._drawer.draw_landmarks(
                         frame,
                         hand_landmarks,
-                        mp.solutions.hands.HAND_CONNECTIONS,
+                        self._hand_connections,
                     )
                 else:
-                    label, confidence = self.recognizer.observe(None)
+                    self._point_history.zeros()
+                    label, confidence = "NONE", 0.0
 
-                if label != "NONE" and not self._is_enabled(label):
-                    label = "NONE"
-                    confidence = 0.0
+                emit_label = label if self._is_enabled(label) else "NONE"
 
-                if label != "NONE" and self._is_enabled(label):
+                if emit_label != "NONE":
                     now = time.monotonic()
-                    should_emit = (
-                        label != self._last_emitted_label
-                        or (now - self._last_emit_time) >= self.emit_cooldown_secs
-                    )
-                    if should_emit:
-                        self.controller.handle_event(
-                            source="gesture", action=label, payload={"confidence": confidence}
-                        )
-                        self._last_emitted_label = label
+                    in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
+                    if (emit_label != self._last_emitted_label) and not in_cooldown:
+                        if self.emit_actions:
+                            self.controller.handle_event(
+                                source="gesture", action=emit_label, payload={"confidence": confidence}
+                            )
+                        self._last_emitted_label = emit_label
                         self._last_emit_time = now
+                if emit_label == "NONE":
+                    self._last_emitted_label = None
+                    self._last_emit_time = 0.0
                 if self.on_detection:
                     try:
-                        # Always record detections, including NONE, for UI status.
-                        self.on_detection(label=label, confidence=confidence)
+                        # Report only enabled labels (or NONE) for UI status.
+                        self.on_detection(label=emit_label, confidence=confidence)
                     except Exception:
                         pass
 
@@ -185,10 +241,36 @@ class RealTimeGestureRecognizer:
                     cv2.imshow(self._window_name, frame)
                     if (cv2.waitKey(1) & 0xFF) == ord("q"):
                         break
+                self._sleep_for_fps(loop_start)
         except cv2.error as exc:
             print(f"[GESTURE] OpenCV error: {exc}")
         finally:
             self._cleanup(join_thread=False)
+
+    def _sleep_for_fps(self, loop_start: float) -> None:
+        if not self.max_fps or self.max_fps <= 0:
+            return
+        elapsed = time.monotonic() - loop_start
+        target = 1.0 / self.max_fps
+        remaining = target - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    def _resolve_label(
+        self,
+        *,
+        keypoint_id: int,
+        keypoint_score: float,
+        finger_gesture_id: int,
+        finger_gesture_score: float,
+    ) -> tuple[str, float]:
+        if finger_gesture_id and self._point_history_labels:
+            if 0 <= finger_gesture_id < len(self._point_history_labels):
+                return self._point_history_labels[finger_gesture_id], finger_gesture_score
+        if self._keypoint_labels and 0 <= keypoint_id < len(self._keypoint_labels):
+            if keypoint_score >= self.confidence_threshold:
+                return self._keypoint_labels[keypoint_id], keypoint_score
+        return "NONE", 0.0
 
     def stop(self) -> None:
         self.active = False
