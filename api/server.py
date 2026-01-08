@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from command_controller.controller import CommandController
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
+from utils.runtime_state import get_client_os, set_client_os
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
 OLLAMA_URL = os.getenv("EASY_OLLAMA_URL", "http://127.0.0.1:11434")
@@ -76,6 +77,10 @@ class StartRecognitionRequest(BaseModel):
     show_window: bool = False
 
 
+class ClientInfoRequest(BaseModel):
+    os: Optional[str] = None
+
+
 @app.get("/gestures")
 def list_gestures():
     workflow.ensure_presets_loaded()
@@ -110,6 +115,8 @@ def update_settings(payload: dict[str, Any]):
         "recognition_stable_frames",
         "recognition_emit_cooldown_ms",
         "recognition_confidence_threshold",
+        "enable_commands",
+        "recognition_max_fps",
     }
     updates = {key: value for key, value in payload.items() if key in allowed}
     if not updates:
@@ -125,7 +132,6 @@ def update_settings(payload: dict[str, Any]):
 def add_static(req: StaticGestureRequest):
     workflow.collect_static(req.label, target_frames=req.target_frames, show_preview=False)
     workflow.dataset.set_hotkey(req.label, req.hotkey)
-    workflow.dataset.save()
     return {"status": "ok"}
 
 
@@ -138,7 +144,6 @@ def add_dynamic(req: DynamicGestureRequest):
         show_preview=False,
     )
     workflow.dataset.set_hotkey(req.label, req.hotkey)
-    workflow.dataset.save()
     return {"status": "ok"}
 
 
@@ -166,10 +171,10 @@ def set_gesture_command(req: SetGestureCommandRequest):
 
 @app.post("/train")
 def train():
-    if workflow.dataset.X is None or workflow.dataset.y is None:
-        raise HTTPException(status_code=400, detail="No samples to train on")
-    workflow.train_and_save()
-    return {"status": "ok"}
+    raise HTTPException(
+        status_code=400,
+        detail="Training is handled via the TFLite notebooks. Run them to update models.",
+    )
 
 
 @app.post("/recognition/start")
@@ -179,6 +184,11 @@ def start_recognition(req: StartRecognitionRequest):
         stable_frames = req.stable_frames or int(settings.get("recognition_stable_frames", 5))
         emit_cooldown_ms = int(settings.get("recognition_emit_cooldown_ms", 500))
         emit_cooldown_secs = max(0.0, emit_cooldown_ms / 1000.0)
+        emit_actions = bool(settings.get("enable_commands", True))
+        max_fps_value = settings.get("recognition_max_fps", 0)
+        max_fps = float(max_fps_value) if max_fps_value is not None else 0.0
+        if max_fps < 0:
+            max_fps = 0.0
         confidence_threshold = (
             req.confidence_threshold
             if req.confidence_threshold is not None
@@ -191,9 +201,12 @@ def start_recognition(req: StartRecognitionRequest):
             stable_frames=stable_frames,
             emit_cooldown_secs=emit_cooldown_secs,
             show_window=req.show_window,
+            emit_actions=emit_actions,
+            max_fps=max_fps,
         )
     except RuntimeError as exc:
         # Surface missing model / setup errors as 400 for the UI.
+        print(f"[API] Start recognition failed: {exc}")
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
@@ -210,7 +223,17 @@ def stop_recognition():
 
 @app.get("/status")
 def status():
-    return {"recognition_running": workflow.is_recognizing(), "user_id": workflow.user_id}
+    return {
+        "recognition_running": workflow.is_recognizing(),
+        "user_id": workflow.user_id,
+        "client_os": get_client_os(),
+    }
+
+
+@app.post("/client/info")
+def set_client_info(payload: ClientInfoRequest):
+    set_client_os(payload.os)
+    return {"status": "ok", "client_os": get_client_os()}
 
 
 @app.get("/", response_class=HTMLResponse)

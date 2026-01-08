@@ -84,6 +84,7 @@ class CommandEngine:
         stripped = text.strip()
         shortcut = self._shortcut_for_text(stripped)
         if shortcut:
+            self.logger.info(f"Shortcut match: '{stripped}' -> {shortcut.get('keys')}")
             return {"steps": [shortcut]}
         if stripped.startswith("{") or stripped.startswith("["):
             try:
@@ -92,10 +93,13 @@ class CommandEngine:
                 return json.loads(stripped)
             except json.JSONDecodeError:
                 pass
+        self.logger.info(f"LLM interpret: '{stripped}'")
         return self.interpreter.interpret(text, context)
 
     def _shortcut_for_text(self, text: str) -> dict | None:
         normalized = text.lower().strip()
+        normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+        normalized = " ".join(normalized.split())
         if not normalized:
             return None
         modifier = "command" if platform.system() == "Darwin" else "ctrl"

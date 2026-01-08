@@ -5,7 +5,9 @@
   "log_level": "INFO",
   "auto_start": false,
   "ui_poll_interval_ms": 500,
-  "recognition_confidence_threshold": 0.6,
-  "recognition_stable_frames": 5,
-  "recognition_emit_cooldown_ms": 200
+  "recognition_confidence_threshold": 0.5,
+  "recognition_stable_frames": 2,
+  "recognition_emit_cooldown_ms": 500,
+  "enable_commands": false,
+  "recognition_max_fps": 10
 }

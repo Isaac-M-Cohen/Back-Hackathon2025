@@ -87,6 +87,12 @@ export const Api = {
   async status() {
     return request("/status");
   },
+  async setClientInfo(payload) {
+    return request("/client/info", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
   async health() {
     return request("/health");
   },

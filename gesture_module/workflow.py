@@ -6,12 +6,7 @@ This keeps the camera closed until explicitly invoked by the UI/consumer.
 from __future__ import annotations
 
 from command_controller.controller import CommandController
-from video_module import (
-    GestureCollector,
-    GestureDataset,
-    GestureTrainer,
-    VideoStream,
-)
+from video_module import GestureCollector, GestureDataset
 from gesture_module.gesture_recognizer import RealTimeGestureRecognizer
 from pathlib import Path
 
@@ -23,42 +18,17 @@ class GestureWorkflow:
         self.user_id = user_id
         self.window_size = window_size
         self.dataset = GestureDataset(user_id=user_id)
-        self.trainer = GestureTrainer(window_size=window_size)
         self._recognizer: RealTimeGestureRecognizer | None = None
         self._last_detection: dict | None = None
         self.ensure_presets_loaded()
 
     def ensure_presets_loaded(self) -> bool:
-        """Ensure preset samples are loaded and a model is trained."""
-        if self.dataset.load_model() is not None and self.dataset.labels:
-            return True
-        keypoint_csv = Path("data/presets/keypoint.csv")
-        label_csv = Path("data/presets/keypoint_classifier_label.csv")
-        if not keypoint_csv.exists() or not label_csv.exists():
-            return False
-        try:
-            from scripts.import_preset_gestures import import_keypoints
-        except Exception:
-            return False
-        try:
-            import_keypoints(
-                keypoint_csv,
-                label_csv,
-                self.dataset,
-                window_size=self.window_size,
-            )
-            artifacts = self.trainer.train(self.dataset)
-            self.dataset.save_model(artifacts)
-            return True
-        except Exception:
-            return False
+        """Ensure preset keypoint CSV/labels exist under user_data."""
+        return self.dataset.ensure_presets()
 
     def collect_static(self, label: str, target_frames: int = 60, *, show_preview: bool = False) -> None:
-        collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
-        samples = collector.collect_static(label, target_frames=target_frames)
-        if samples:
-            self.dataset.add_samples(label, samples)
-            self.dataset.save()
+        collector = GestureCollector(show_preview=show_preview)
+        collector.collect_static(self.dataset, label, target_frames=target_frames)
 
     def collect_dynamic(
         self,
@@ -68,17 +38,18 @@ class GestureWorkflow:
         sequence_length: int = 30,
         show_preview: bool = False,
     ) -> None:
-        collector = GestureCollector(window_size=self.window_size, show_preview=show_preview)
-        samples = collector.collect_dynamic(
-            label, repetitions=repetitions, sequence_length=sequence_length
+        collector = GestureCollector(show_preview=show_preview)
+        collector.collect_dynamic(
+            self.dataset,
+            label,
+            repetitions=repetitions,
+            show_preview=show_preview,
         )
-        if samples:
-            self.dataset.add_samples(label, samples)
-            self.dataset.save()
 
     def train_and_save(self) -> None:
-        artifacts = self.trainer.train(self.dataset)
-        self.dataset.save_model(artifacts)
+        raise RuntimeError(
+            "Training is handled via the TFLite notebooks. Run the training notebooks to update models."
+        )
 
     def start_recognition(
         self,
@@ -88,6 +59,8 @@ class GestureWorkflow:
         stable_frames: int = 5,
         emit_cooldown_secs: float = 0.5,
         show_window: bool = True,
+        emit_actions: bool = True,
+        max_fps: float = 0.0,
     ) -> None:
         """Open the camera and start realtime recognition."""
         if self._recognizer and self._recognizer.is_running():
@@ -102,6 +75,8 @@ class GestureWorkflow:
             on_detection=self._record_detection,
             emit_cooldown_secs=emit_cooldown_secs,
             enabled_labels=set(self.dataset.enabled),
+            emit_actions=emit_actions,
+            max_fps=max_fps,
         )
         self._recognizer.start()
 

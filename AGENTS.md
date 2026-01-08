@@ -8,12 +8,13 @@ be the single source of context when resetting a session.
 - Python entrypoint: `main.py` launches the Tauri desktop app and sets up env loading.
 - FastAPI server for web UI: `api/server.py`.
 - Windows-first target; macOS support is for local development.
+- Session notes: see `SESSION.md` for in-progress context.
 
 ## Project map (what lives where)
 - `main.py`: entrypoint; loads env files, enforces Python 3.11, and launches the Tauri desktop app.
 - `command_controller/`: command routing (`controller.py`), execution (`executor.py` placeholder), logging (`logger.py`).
 - `gesture_module/`: realtime recognizer (`gesture_recognizer.py`), workflow wrapper (`workflow.py`), basic tracking (`hand_tracking.py`).
-- `video_module/gesture_ml.py`: dataset, training (MLP), inference smoothing, and sample collection.
+- `video_module/gesture_ml.py`: dataset + sample collection for TFLite keypoint/point-history classifiers.
 - `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), whisper backends.
 - `api/server.py`: FastAPI endpoints used by the React UI.
 - `ui/`: legacy PySide6 desktop UI (no longer used).
@@ -50,17 +51,18 @@ be the single source of context when resetting a session.
 - `ENABLE_VOICE=0` to disable voice in the backend (API/sidecar).
 
 ## Core flows (high level)
-- Gesture training (desktop or web UI): collect static/dynamic samples, save dataset, then train and save model.
+- Gesture training (desktop or web UI): collect static/dynamic samples to CSVs, then train TFLite models via notebooks.
 - Gesture recognition (desktop or web UI): open camera, recognize labels, emit `CommandController.handle_event`.
 - Voice recognition: mic audio is streamed to STT provider, transcript is forwarded to `CommandController.handle_event`.
 
 ## Gesture ML pipeline (details)
-- Input features: 21 hand landmarks * 3 dims = 63 floats per frame.
-- Dynamic gestures are flattened into windows: `window_size * 63`.
-- `GestureCollector` captures frames, normalizes landmarks, and builds windows.
-- `GestureTrainer` trains an `MLPClassifier` from scratch each time.
-- `GestureRecognizer` applies confidence thresholding and stability (streak) logic.
-- If no model is trained, `GestureDataset.build_none_only_artifacts` creates a fallback model that always returns `NONE`.
+- Input features: 21 hand landmarks (x,y) = 42 values for static sign classification.
+- Motion gestures use point history: 16 frames of index fingertip (x,y) = 32 values.
+- `GestureCollector` captures frames and writes rows to CSVs under `user_data/<user_id>/`.
+- TFLite classifiers are loaded from:
+  - `user_data/<user_id>/keypoint_classifier/keypoint_classifier.tflite`
+  - `user_data/<user_id>/point_history_classifier/point_history_classifier.tflite`
+- Labels are read from the corresponding `*_label.csv` files.
 
 ## API endpoints (FastAPI)
 - `GET /gestures` → `{ items: [{ label, hotkey? }] }`
@@ -68,7 +70,7 @@ be the single source of context when resetting a session.
 - `POST /gestures/static` → collect static samples and save hotkey
 - `POST /gestures/dynamic` → collect dynamic samples and save hotkey
 - `POST /gestures/delete` → delete a gesture and its samples
-- `POST /train` → train model (requires samples)
+- `POST /train` → returns an error; training is done via the notebooks
 - `POST /recognition/start` → starts realtime recognition
 - `POST /recognition/stop` → stops realtime recognition
 - `GET /recognition/last` → last detection info
@@ -99,13 +101,13 @@ be the single source of context when resetting a session.
 - Configs are in `config/*.json`.
 
 ## Preset import script
-- `scripts/import_preset_gestures.py` imports CSV presets into a user dataset and trains.
+- `scripts/import_preset_gestures.py` copies preset CSVs into `user_data/<user_id>/keypoint_classifier/`.
 - Expects `data/presets/keypoint.csv` and `data/presets/keypoint_classifier_label.csv`.
 
 ## Notes for edits
 - Keep code ASCII-only unless a file already uses Unicode.
 - Avoid changing unrelated files or generated artifacts.
-- If you touch training, keep input dimension logic aligned with `window_size * 63`.
+- If you touch training, keep input dimensions aligned with 42 (keypoint) and 32 (point history).
 - UI collects gesture samples, then calls training; API endpoints mirror these flows.
 
 ## Testing
