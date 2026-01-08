@@ -223,8 +223,8 @@ class RealTimeGestureRecognizer:
                     self._last_emit_time = 0.0
                 if self.on_detection:
                     try:
-                        # Always record detections, including NONE, for UI status.
-                        self.on_detection(label=label, confidence=confidence)
+                        # Report only enabled labels (or NONE) for UI status.
+                        self.on_detection(label=emit_label, confidence=confidence)
                     except Exception:
                         pass
 
