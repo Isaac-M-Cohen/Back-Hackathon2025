@@ -10,6 +10,7 @@ from typing import Optional
 import cv2
 from command_controller.controller import CommandController
 from utils.file_utils import load_json
+from utils.settings_store import is_deep_logging
 from video_module import GestureDataset, VideoStream
 from video_module.tflite_classifiers import KeyPointClassifier, PointHistoryClassifier
 from video_module.tflite_pipeline import (
@@ -36,6 +37,7 @@ class RealTimeGestureRecognizer:
         enabled_labels: Optional[set[str]] = None,
         emit_actions: bool = True,
         max_fps: float = 0.0,
+        watchdog_timeout_secs: float = 0.0,
     ) -> None:
         self.controller = controller
         self.show_window = show_window
@@ -44,6 +46,7 @@ class RealTimeGestureRecognizer:
         self.enabled_labels = enabled_labels
         self.emit_actions = emit_actions
         self.max_fps = max_fps
+        self.watchdog_timeout_secs = watchdog_timeout_secs
         self.confidence_threshold = confidence_threshold
         self._thread: Optional[threading.Thread] = None
         self._window_name = "Gesture Recognition"
@@ -109,6 +112,7 @@ class RealTimeGestureRecognizer:
         self._closed = False
         self._last_emitted_label: str | None = None
         self._last_emit_time: float = 0.0
+        self._last_frame_ts: float = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -139,14 +143,21 @@ class RealTimeGestureRecognizer:
     def _run_loop(self) -> None:
         self.stream.open()
         self.active = True
+        self._last_frame_ts = time.monotonic()
         print("[GESTURE] Recognition started — press 'q' to exit.")
         try:
             while self.active and not self._stop_event.is_set():
+                if self.watchdog_timeout_secs > 0:
+                    stalled_for = time.monotonic() - self._last_frame_ts
+                    if stalled_for > self.watchdog_timeout_secs:
+                        print("[GESTURE] Watchdog triggered; stopping recognition.")
+                        break
                 loop_start = time.monotonic()
                 ok, frame = self.stream.read()
                 if not ok or frame is None:
                     print("[GESTURE] Failed to read from camera.")
                     break
+                self._last_frame_ts = time.monotonic()
 
                 frame = cv2.flip(frame, 1)
                 results = self._hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -212,6 +223,12 @@ class RealTimeGestureRecognizer:
                     now = time.monotonic()
                     in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
                     if (emit_label != self._last_emitted_label) and not in_cooldown:
+                        if is_deep_logging():
+                            print(
+                                "[DEEP][GESTURE] emit "
+                                f"label={emit_label} confidence={confidence:.3f} "
+                                f"cooldown={self.emit_cooldown_secs:.2f}s"
+                            )
                         if self.emit_actions:
                             self.controller.handle_event(
                                 source="gesture", action=emit_label, payload={"confidence": confidence}

@@ -12,6 +12,7 @@ from command_controller.executor import Executor
 from command_controller.intents import normalize_steps, validate_steps
 from command_controller.llm import LocalLLMInterpreter, LocalLLMError
 from command_controller.logger import CommandLogger
+from utils.settings_store import is_deep_logging
 
 
 SENSITIVE_PATTERNS = re.compile(
@@ -44,6 +45,8 @@ class CommandEngine:
             steps = validate_steps(self._insert_wait_for_url(normalize_steps(payload)))
             elapsed_ms = (time.monotonic() - start) * 1000.0
             self.logger.info(f"LLM parse time: {elapsed_ms:.0f} ms")
+            if is_deep_logging():
+                print(f"[DEEP][ENGINE] parsed payload={payload} steps={steps}")
         except (ValueError, LocalLLMError) as exc:
             self.logger.error(f"Command parse failed: {exc}")
             return {"status": "error", "reason": str(exc)}
@@ -73,6 +76,8 @@ class CommandEngine:
         except ValueError as exc:
             self.logger.error(f"Command steps invalid: {exc}")
             return {"status": "error", "reason": str(exc)}
+        if is_deep_logging():
+            print(f"[DEEP][ENGINE] run_steps cleaned_steps={cleaned_steps}")
 
         if self._requires_confirmation(text, cleaned_steps):
             pending = self.confirmations.create(

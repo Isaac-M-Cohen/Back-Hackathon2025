@@ -21,6 +21,7 @@ from command_controller.controller import CommandController
 from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
+from utils.settings_store import refresh_settings, is_deep_logging
 from utils.runtime_state import get_client_os, set_client_os
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
@@ -141,6 +142,7 @@ def update_settings(payload: dict[str, Any]):
     from utils.file_utils import save_json
 
     save_json("config/app_settings.json", settings)
+    refresh_settings()
     return {"status": "ok", "settings": settings}
 
 
@@ -213,6 +215,8 @@ def set_gesture_command(req: SetGestureCommandRequest):
     workflow.ensure_presets_loaded()
     workflow.dataset.set_command(req.label, req.command)
     controller.dataset.set_command(req.label, req.command)
+    if is_deep_logging():
+        print(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
     if req.command.strip():
         try:
             payload = controller.engine.interpreter.interpret(
@@ -223,6 +227,8 @@ def set_gesture_command(req: SetGestureCommandRequest):
                 raise ValueError("No executable steps returned")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
+        if is_deep_logging():
+            print(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
         workflow.dataset.set_command_steps(req.label, steps)
         controller.dataset.set_command_steps(req.label, steps)
     else:
