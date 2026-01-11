@@ -77,10 +77,12 @@ class GestureDataset:
 
         self.hotkeys_path = self.base_dir / "hotkeys.json"
         self.commands_path = self.base_dir / "commands.json"
+        self.command_steps_path = self.base_dir / "command_steps.json"
         self.enabled_path = self.base_dir / "enabled_gestures.json"
 
         self.hotkeys: dict[str, str] = {}
         self.commands: dict[str, str] = {}
+        self.command_steps: dict[str, list[dict]] = {}
         self.enabled: set[str] = set()
         self._load_metadata()
 
@@ -95,6 +97,11 @@ class GestureDataset:
                 self.commands = json.loads(self.commands_path.read_text())
             except json.JSONDecodeError:
                 self.commands = {}
+        if self.command_steps_path.exists():
+            try:
+                self.command_steps = json.loads(self.command_steps_path.read_text())
+            except json.JSONDecodeError:
+                self.command_steps = {}
         if self.enabled_path.exists():
             try:
                 items = json.loads(self.enabled_path.read_text())
@@ -192,6 +199,13 @@ class GestureDataset:
             self.commands.pop(label, None)
         self.commands_path.write_text(json.dumps(self.commands, indent=2))
 
+    def set_command_steps(self, label: str, steps: list[dict] | None) -> None:
+        if steps:
+            self.command_steps[label] = steps
+        else:
+            self.command_steps.pop(label, None)
+        self.command_steps_path.write_text(json.dumps(self.command_steps, indent=2))
+
     def set_enabled(self, label: str, enabled: bool) -> None:
         if enabled:
             self.enabled.add(label)
@@ -209,9 +223,11 @@ class GestureDataset:
         )
         self.hotkeys.pop(label, None)
         self.commands.pop(label, None)
+        self.command_steps.pop(label, None)
         self.enabled.discard(label)
         self.hotkeys_path.write_text(json.dumps(self.hotkeys, indent=2))
         self.commands_path.write_text(json.dumps(self.commands, indent=2))
+        self.command_steps_path.write_text(json.dumps(self.command_steps, indent=2))
         self.enabled_path.write_text(json.dumps(sorted(self.enabled), indent=2))
 
     def _remove_label_from_csv(

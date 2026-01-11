@@ -13,6 +13,21 @@ ALLOWED_INTENTS = {
     "scroll",
 }
 
+KEY_ALIASES = {
+    "cmd": "command",
+    "command": "command",
+    "ctrl": "control",
+    "control": "control",
+    "opt": "alt",
+    "option": "alt",
+    "alt": "alt",
+    "shift": "shift",
+    "enter": "enter",
+    "return": "enter",
+    "esc": "esc",
+    "escape": "esc",
+}
+
 
 def normalize_steps(payload: Any) -> list[dict]:
     """Return a normalized list of intent steps from a parsed payload."""
@@ -67,9 +82,15 @@ def validate_step(step: dict) -> dict:
             keys = [item.strip() for item in keys.split("+") if item.strip()]
         if not isinstance(keys, list) or not keys:
             raise ValueError("key_combo requires non-empty 'keys'")
-        cleaned["keys"] = [str(k).strip() for k in keys if str(k).strip()]
-        if not cleaned["keys"]:
+        cleaned_keys = []
+        for key in keys:
+            key_str = str(key).strip().lower()
+            if not key_str:
+                continue
+            cleaned_keys.append(KEY_ALIASES.get(key_str, key_str))
+        if not cleaned_keys:
             raise ValueError("key_combo requires non-empty 'keys'")
+        cleaned["keys"] = cleaned_keys
         return cleaned
 
     if intent == "type_text":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from typing import Iterable
 from urllib import request
 from urllib.error import URLError
 
@@ -22,8 +23,13 @@ class LocalLLMInterpreter:
         self.model = os.getenv("EASY_OLLAMA_MODEL", settings.get("ollama_model", "llama3.1:8b"))
         self.timeout_secs = float(settings.get("request_timeout_secs", 30))
 
-    def interpret(self, text: str, context: dict | None = None) -> dict:
-        prompt = self._build_prompt(text, context or {})
+    def interpret(
+        self,
+        text: str,
+        context: dict | None = None,
+        supported_intents: Iterable[str] | None = None,
+    ) -> dict:
+        prompt = self._build_prompt(text, context or {}, supported_intents)
         payload = json.dumps(
             {
                 "model": self.model,
@@ -51,10 +57,18 @@ class LocalLLMInterpreter:
             raise LocalLLMError("LLM did not return valid JSON")
         return parsed
 
-    def _build_prompt(self, text: str, context: dict) -> str:
+    def _build_prompt(
+        self,
+        text: str,
+        context: dict,
+        supported_intents: Iterable[str] | None,
+    ) -> str:
         context_json = json.dumps(context, ensure_ascii=True)
+        intent_list = ", ".join(sorted(supported_intents or []))
+        intent_line = f"Supported intents: {intent_list}\n" if intent_list else ""
         return (
             "You are a command intent parser. Convert the user request into JSON only. "
+            f"{intent_line}"
             "Use this schema:\n"
             "{\n"
             '  "steps": [\n'
