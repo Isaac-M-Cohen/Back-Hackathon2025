@@ -7,15 +7,10 @@ import subprocess
 import sys
 import webbrowser
 
-from utils.file_utils import load_json
+from utils.settings_store import get_settings, is_deep_logging
 
 
 class Executor:
-    def __init__(self) -> None:
-        settings = load_json("config/app_settings.json")
-        self.log_debug = bool(settings.get("log_command_debug", False))
-        self.hotkey_interval = float(settings.get("command_hotkey_interval_secs", 0.05))
-
     def execute(self, action: str, payload: dict) -> None:
         print(f"[EXECUTOR] Performing action='{action}' payload={payload}")
 
@@ -66,9 +61,11 @@ class Executor:
             print("[EXECUTOR] pyautogui not available; key_combo skipped")
             return
         normalized = self._normalize_keys(keys)
-        if self.log_debug:
+        settings = get_settings()
+        if settings.get("log_command_debug") or is_deep_logging():
             print(f"[EXECUTOR][pyautogui] hotkey args={normalized}")
-        automation.hotkey(*normalized, interval=self.hotkey_interval)
+        interval = float(settings.get("command_hotkey_interval_secs", 0.05))
+        automation.hotkey(*normalized, interval=interval)
 
     def _normalize_keys(self, keys: list[str]) -> list[str]:
         if not keys:
@@ -90,7 +87,7 @@ class Executor:
         if not automation:
             print("[EXECUTOR] pyautogui not available; type_text skipped")
             return
-        if self.log_debug:
+        if get_settings().get("log_command_debug") or is_deep_logging():
             print(f"[EXECUTOR][pyautogui] write text={text!r}")
         automation.write(text, interval=0.02)
 
@@ -100,7 +97,7 @@ class Executor:
             print("[EXECUTOR] pyautogui not available; scroll skipped")
             return
         delta = amount * 100
-        if self.log_debug:
+        if get_settings().get("log_command_debug") or is_deep_logging():
             print(f"[EXECUTOR][pyautogui] scroll delta={delta}")
         automation.scroll(delta if direction == "up" else -delta)
 

@@ -10,6 +10,7 @@ from urllib import request
 from urllib.error import URLError
 
 from utils.file_utils import load_json
+from utils.settings_store import get_settings, is_deep_logging
 
 
 class LocalLLMError(RuntimeError):
@@ -19,11 +20,9 @@ class LocalLLMError(RuntimeError):
 class LocalLLMInterpreter:
     def __init__(self, settings_path: str = "config/command_settings.json") -> None:
         settings = load_json(settings_path)
-        app_settings = load_json("config/app_settings.json")
         self.base_url = os.getenv("EASY_OLLAMA_URL", settings.get("ollama_url", "http://127.0.0.1:11434"))
         self.model = os.getenv("EASY_OLLAMA_MODEL", settings.get("ollama_model", "llama3.1:8b"))
         self.timeout_secs = float(settings.get("request_timeout_secs", 30))
-        self.log_debug = bool(app_settings.get("log_command_debug", False))
 
     def interpret(
         self,
@@ -54,7 +53,7 @@ class LocalLLMInterpreter:
             raise LocalLLMError(f"Invalid LLM response: {exc}") from exc
 
         output = data.get("response", "")
-        if self.log_debug:
+        if get_settings().get("log_command_debug") or is_deep_logging():
             print(f"[LLM] raw_response={output}")
         parsed = self._extract_json(output)
         if parsed is None:
