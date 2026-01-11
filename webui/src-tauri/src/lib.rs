@@ -1,10 +1,15 @@
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Listener, Manager, Wry};
+use tauri::WindowEvent;
+
+#[derive(Clone)]
+struct BackendChild(Arc<Mutex<Option<Child>>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -40,7 +45,8 @@ pub fn run() {
         )?;
       }
 
-      let api_base = spawn_backend(app)?;
+      let (api_base, child) = spawn_backend(app)?;
+      app.manage(BackendChild(Arc::new(Mutex::new(Some(child)))));
       app.emit("easy://api-base", api_base.clone())?;
 
       let app_handle = app.handle().clone();
@@ -62,6 +68,11 @@ pub fn run() {
 
       Ok(())
     })
+    .on_window_event(|window, event| {
+      if let WindowEvent::CloseRequested { .. } = event {
+        shutdown_backend(window.app_handle());
+      }
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
@@ -73,7 +84,7 @@ fn pick_port() -> Result<u16, Box<dyn std::error::Error>> {
   Ok(port)
 }
 
-fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Error>> {
+fn spawn_backend(app: &tauri::App<Wry>) -> Result<(String, Child), Box<dyn std::error::Error>> {
     let port = pick_port()?;
     let host = "127.0.0.1";
     let api_base = format!("http://{host}:{port}");
@@ -85,7 +96,7 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
         let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..");
-        Command::new(python)
+        let child = Command::new(python)
             .args([
                 "-m",
                 "uvicorn",
@@ -97,17 +108,19 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<String, Box<dyn std::error::Er
             ])
             .current_dir(repo_root)
             .spawn()?;
+        wait_for_backend(host, port, Duration::from_secs(20))?;
+        app.manage(api_base.clone());
+        return Ok((api_base, child));
     } else {
       let backend_path = resolve_backend_path(app)?;
-        Command::new(backend_path)
+        let child = Command::new(backend_path)
             .env("EASY_API_HOST", host)
             .env("EASY_API_PORT", port.to_string())
             .spawn()?;
+        wait_for_backend(host, port, Duration::from_secs(20))?;
+        app.manage(api_base.clone());
+        return Ok((api_base, child));
     }
-
-    wait_for_backend(host, port, Duration::from_secs(20))?;
-    app.manage(api_base.clone());
-    Ok(api_base)
 }
 
 fn wait_for_backend(
@@ -125,6 +138,15 @@ fn wait_for_backend(
             return Err("Backend did not start in time".into());
         }
         std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn shutdown_backend(app: &tauri::AppHandle<Wry>) {
+    if let Some(state) = app.try_state::<BackendChild>() {
+        let child = state.0.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(mut child) = child {
+            let _ = child.kill();
+        }
     }
 }
 
