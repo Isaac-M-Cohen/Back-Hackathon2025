@@ -27,14 +27,11 @@ export default function GestureControlApp() {
   const [presetGestures, setPresetGestures] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [error, setError] = useState("");
   const [lastDetection, setLastDetection] = useState(null);
   const [pollIntervalMs, setPollIntervalMs] = useState(1000);
-  const [commandDrafts, setCommandDrafts] = useState({});
-  const [editingCommandId, setEditingCommandId] = useState(null);
   const [pendingCommands, setPendingCommands] = useState([]);
   const [isBooting, setIsBooting] = useState(true);
   const [bootMessage, setBootMessage] = useState("Starting...");
@@ -44,6 +41,9 @@ export default function GestureControlApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [themeMode, setThemeMode] = useState("light");
   const [audioDevices, setAudioDevices] = useState({ inputs: [], outputs: [] });
+  const [commandModal, setCommandModal] = useState(null);
+  const [isSavingCommand, setIsSavingCommand] = useState(false);
+  const [commandModalError, setCommandModalError] = useState("");
   const defaultSettings = {
     theme: "light",
     ui_poll_interval_ms: 500,
@@ -187,15 +187,6 @@ export default function GestureControlApp() {
           enabled: item.enabled || false,
         })) || [];
       setAllGestures(items);
-      if (!editingCommandId) {
-        setCommandDrafts((prev) => {
-          const next = { ...prev };
-          items.forEach((item) => {
-            next[item.id] = item.command || "";
-          });
-          return next;
-        });
-      }
       setGestures(
         items.filter((item) => item.enabled && item.id !== "NONE")
       );
@@ -222,22 +213,24 @@ export default function GestureControlApp() {
     refreshPresets().finally(() => setShowPresets(true));
   };
 
-  const handlePresetSelect = (preset) => {
-    setSelectedPreset(preset);
-    setShowPresets(false);
-  };
+  const openCommandModal = useCallback(
+    (preset, mode) => {
+      const existing = allGestures.find((item) => item.id === preset.id);
+      const commandValue = existing?.command || "";
+      setCommandModalError("");
+      setCommandModal({
+        mode,
+        gesture: preset,
+        value: commandValue,
+        originalValue: commandValue,
+      });
+    },
+    [allGestures]
+  );
 
-  const handlePresetConfirm = async () => {
-    if (!selectedPreset) {
-      return;
-    }
-    try {
-      await Api.enableGesture(selectedPreset.id, true);
-      await refreshGestures();
-    } catch (err) {
-      setError(err.message);
-    }
-    setSelectedPreset(null);
+  const handlePresetSelect = (preset) => {
+    setShowPresets(false);
+    openCommandModal(preset, "add");
   };
 
   const handleDelete = async (id) => {
@@ -249,24 +242,34 @@ export default function GestureControlApp() {
       setError(err.message);
     }
   };
-
-  const handleCommandChange = (id, value) => {
-    setCommandDrafts((prev) => ({ ...prev, [id]: value }));
+  const closeCommandModal = () => {
+    setCommandModal(null);
+    setIsSavingCommand(false);
+    setCommandModalError("");
   };
 
-  const handleCommandSave = async (id) => {
-    const command = commandDrafts[id] || "";
-    try {
-      await Api.setGestureCommand(id, command);
-      await refreshGestures();
-    } catch (err) {
-      setError(err.message);
+  const handleCommandSubmit = async () => {
+    if (!commandModal) {
+      return;
     }
-  };
-
-  const handleCommandBlur = async (id) => {
-    setEditingCommandId(null);
-    await handleCommandSave(id);
+    const commandText = commandModal.value.trim();
+    if (!commandText) {
+      return;
+    }
+    setIsSavingCommand(true);
+    setCommandModalError("");
+    try {
+      await Api.setGestureCommand(commandModal.gesture.id, commandText);
+      if (commandModal.mode === "add") {
+        await Api.enableGesture(commandModal.gesture.id, true);
+      }
+      await refreshGestures();
+      closeCommandModal();
+    } catch (err) {
+      setCommandModalError(err.message || "Failed to save command.");
+    } finally {
+      setIsSavingCommand(false);
+    }
   };
 
   const toggleRecognition = async () => {
@@ -487,24 +490,13 @@ export default function GestureControlApp() {
                           </React.Fragment>
                         ))}
                     </div>
-                    <div className="mt-3">
-                      <label className="text-xs text-gray-500 block mb-1">
+                    <div className="mt-3 text-xs text-gray-500">
+                      <span className="uppercase tracking-wide text-[10px]">
                         Command
-                      </label>
-                      <input
-                        type="text"
-                        value={commandDrafts[item.id] ?? item.command ?? ""}
-                        onChange={(e) => handleCommandChange(item.id, e.target.value)}
-                        onFocus={() => setEditingCommandId(item.id)}
-                        onBlur={() => handleCommandBlur(item.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        placeholder="Describe the action to run"
-                      />
+                      </span>
+                      <div className="mt-1 text-sm text-gray-700">
+                        {item.command || "No command set"}
+                      </div>
                     </div>
                   </div>
 
@@ -526,7 +518,10 @@ export default function GestureControlApp() {
                           Delete
                         </button>
                         <button
-                          onClick={() => setMenuOpen(null)}
+                          onClick={() => {
+                            setMenuOpen(null);
+                            openCommandModal(item.gesture, "edit");
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                         >
                           Edit
@@ -562,11 +557,21 @@ export default function GestureControlApp() {
         />
       )}
 
-      {selectedPreset && (
-        <ConfirmModal
-          preset={selectedPreset}
-          onConfirm={handlePresetConfirm}
-          onCancel={() => setSelectedPreset(null)}
+      {commandModal && (
+        <CommandModal
+          mode={commandModal.mode}
+          gesture={commandModal.gesture}
+          value={commandModal.value}
+          originalValue={commandModal.originalValue}
+          onChange={(next) =>
+            setCommandModal((prev) =>
+              prev ? { ...prev, value: next } : prev
+            )
+          }
+          onCancel={closeCommandModal}
+          onConfirm={handleCommandSubmit}
+          isSaving={isSavingCommand}
+          error={commandModalError}
         />
       )}
 
@@ -632,30 +637,75 @@ function PresetModal({ presets, onSelect, onClose }) {
   );
 }
 
-function ConfirmModal({ preset, onConfirm, onCancel }) {
+function CommandModal({
+  mode,
+  gesture,
+  value,
+  originalValue,
+  onChange,
+  onCancel,
+  onConfirm,
+  isSaving,
+  error,
+}) {
+  const trimmed = value.trim();
+  const isUnchanged =
+    mode === "edit" && trimmed === originalValue.trim();
+  const isDisabled = !trimmed || isUnchanged || isSaving;
+  const title = mode === "edit" ? "Edit Command" : "Add Command";
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-8 z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
-        <h2 className="text-xl font-light mb-4">Enable Gesture</h2>
-        {preset && (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-8 z-50">
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-light mb-2">{title}</h2>
+        {gesture && (
           <p className="text-sm text-gray-600 mb-4">
-            Add <span className="font-medium">{preset.name}</span> to your active list?
+            {mode === "edit" ? "Update" : "Add"}{" "}
+            <span className="font-medium">{gesture.name}</span> command
           </p>
         )}
-        <div className="flex gap-3">
+        <label className="text-xs text-gray-500 block mb-2">
+          Command
+        </label>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          placeholder="Describe the action to run"
+          disabled={isSaving}
+        />
+        {error && (
+          <div className="mt-3 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+        <div className="mt-6 flex gap-3">
           <button
             onClick={onCancel}
             className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            disabled={isSaving}
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
+              isDisabled
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-blue-500 text-white hover:bg-blue-600"
+            }`}
+            disabled={isDisabled}
           >
-            Confirm
+            Add
           </button>
         </div>
+        {isSaving && (
+          <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
+            <div className="text-sm text-gray-600">
+              Interpreting command...
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

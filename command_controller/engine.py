@@ -64,6 +64,29 @@ class CommandEngine:
         self.executor.execute_steps(steps)
         return {"status": "ok"}
 
+    def run_steps(self, *, source: str, text: str, steps: list[dict]) -> dict:
+        if not steps:
+            return {"status": "ignored", "reason": "no_steps"}
+
+        try:
+            cleaned_steps = validate_steps(steps)
+        except ValueError as exc:
+            self.logger.error(f"Command steps invalid: {exc}")
+            return {"status": "error", "reason": str(exc)}
+
+        if self._requires_confirmation(text, cleaned_steps):
+            pending = self.confirmations.create(
+                source=source,
+                text=text,
+                reason="Sensitive command requires confirmation",
+                intents=cleaned_steps,
+            )
+            self.logger.info(f"Command pending confirmation: {pending.id}")
+            return {"status": "pending", "id": pending.id}
+
+        self.executor.execute_steps(cleaned_steps)
+        return {"status": "ok"}
+
     def approve(self, confirmation_id: str) -> dict:
         pending = self.confirmations.pop(confirmation_id)
         if not pending:
