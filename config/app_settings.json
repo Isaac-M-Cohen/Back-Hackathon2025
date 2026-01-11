@@ -12,6 +12,7 @@
   "recognition_max_fps": 10,
   "recognition_watchdog_timeout_ms": 5000,
   "command_timeout_ms": 20000,
+  "command_hotkey_interval_secs": 0.05,
   "log_command_debug": true,
   "microphone_device_index": null,
   "speaker_device_index": null
