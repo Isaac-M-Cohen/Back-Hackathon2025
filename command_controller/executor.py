@@ -14,6 +14,7 @@ class Executor:
     def __init__(self) -> None:
         settings = load_json("config/app_settings.json")
         self.log_debug = bool(settings.get("log_command_debug", False))
+        self.hotkey_interval = float(settings.get("command_hotkey_interval_secs", 0.05))
         self._last_opened_url: str | None = None
         self._intent_handlers = {
             "open_url": self._handle_open_url,
@@ -90,7 +91,7 @@ class Executor:
         normalized = self._normalize_keys(keys)
         if self.log_debug:
             print(f"[EXECUTOR][pyautogui] hotkey args={normalized}")
-        automation.hotkey(*normalized)
+        automation.hotkey(*normalized, interval=self.hotkey_interval)
 
     def _normalize_keys(self, keys: list[str]) -> list[str]:
         if not keys:

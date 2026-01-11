@@ -121,6 +121,7 @@ def update_settings(payload: dict[str, Any]):
         "recognition_max_fps",
         "recognition_watchdog_timeout_ms",
         "command_timeout_ms",
+        "command_hotkey_interval_secs",
         "log_command_debug",
         "microphone_device_index",
         "speaker_device_index",
