@@ -7,8 +7,14 @@ import subprocess
 import sys
 import webbrowser
 
+from utils.file_utils import load_json
+
 
 class Executor:
+    def __init__(self) -> None:
+        settings = load_json("config/app_settings.json")
+        self.log_debug = bool(settings.get("log_command_debug", False))
+
     def execute(self, action: str, payload: dict) -> None:
         print(f"[EXECUTOR] Performing action='{action}' payload={payload}")
 
@@ -59,6 +65,8 @@ class Executor:
             print("[EXECUTOR] pyautogui not available; key_combo skipped")
             return
         normalized = self._normalize_keys(keys)
+        if self.log_debug:
+            print(f"[EXECUTOR][pyautogui] hotkey args={normalized}")
         automation.hotkey(*normalized)
 
     def _normalize_keys(self, keys: list[str]) -> list[str]:
@@ -81,6 +89,8 @@ class Executor:
         if not automation:
             print("[EXECUTOR] pyautogui not available; type_text skipped")
             return
+        if self.log_debug:
+            print(f"[EXECUTOR][pyautogui] write text={text!r}")
         automation.write(text, interval=0.02)
 
     def _scroll(self, direction: str, amount: int) -> None:
@@ -89,6 +99,8 @@ class Executor:
             print("[EXECUTOR] pyautogui not available; scroll skipped")
             return
         delta = amount * 100
+        if self.log_debug:
+            print(f"[EXECUTOR][pyautogui] scroll delta={delta}")
         automation.scroll(delta if direction == "up" else -delta)
 
     def _automation(self):

@@ -5,11 +5,14 @@
   "log_level": "INFO",
   "auto_start": false,
   "ui_poll_interval_ms": 500,
-  "recognition_confidence_threshold": 0.5,
+  "recognition_confidence_threshold": 0.9,
   "recognition_stable_frames": 2,
   "recognition_emit_cooldown_ms": 500,
-  "enable_commands": false,
+  "enable_commands": true,
   "recognition_max_fps": 10,
+  "recognition_watchdog_timeout_ms": 5000,
+  "command_timeout_ms": 20000,
+  "log_command_debug": true,
   "microphone_device_index": null,
   "speaker_device_index": null
 }
