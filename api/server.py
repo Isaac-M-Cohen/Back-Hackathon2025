@@ -45,6 +45,14 @@ app.add_middleware(
 )
 
 
+@app.on_event("shutdown")
+def _shutdown_cleanup() -> None:
+    try:
+        workflow.stop_recognition()
+    except Exception as exc:
+        print(f"[API] Shutdown cleanup failed: {exc}")
+
+
 class StaticGestureRequest(BaseModel):
     label: str
     target_frames: int = Field(default=60, ge=5, le=500)
