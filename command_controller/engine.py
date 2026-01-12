@@ -41,7 +41,7 @@ class CommandEngine:
         try:
             start = time.monotonic()
             payload = self._parse_text(text, context or {})
-            steps = validate_steps(normalize_steps(payload))
+            steps = validate_steps(self._insert_wait_for_url(normalize_steps(payload)))
             elapsed_ms = (time.monotonic() - start) * 1000.0
             self.logger.info(f"LLM parse time: {elapsed_ms:.0f} ms")
         except (ValueError, LocalLLMError) as exc:
@@ -95,6 +95,34 @@ class CommandEngine:
                 pass
         self.logger.info(f"LLM interpret: '{stripped}'")
         return self.interpreter.interpret(text, context)
+
+    def _insert_wait_for_url(self, steps: list[dict]) -> list[dict]:
+        if not steps:
+            return steps
+        updated: list[dict] = []
+        pending_url: str | None = None
+        for step in steps:
+            intent = step.get("intent")
+            if intent == "open_url":
+                pending_url = str(step.get("url", "")).strip() or None
+                updated.append(step)
+                continue
+            if pending_url and intent == "wait_for_url":
+                pending_url = None
+                updated.append(step)
+                continue
+            if pending_url and intent == "type_text":
+                updated.append(
+                    {
+                        "intent": "wait_for_url",
+                        "url": pending_url,
+                        "timeout_secs": 15,
+                        "interval_secs": 0.5,
+                    }
+                )
+                pending_url = None
+            updated.append(step)
+        return updated
 
     def _shortcut_for_text(self, text: str) -> dict | None:
         normalized = text.lower().strip()

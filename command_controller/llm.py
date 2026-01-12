@@ -59,6 +59,7 @@ class LocalLLMInterpreter:
             "{\n"
             '  "steps": [\n'
             '    {"intent":"open_url","url":"https://..."},\n'
+            '    {"intent":"wait_for_url","url":"https://...","timeout_secs":15,"interval_secs":0.5},\n'
             '    {"intent":"open_app","app":"App Name"},\n'
             '    {"intent":"key_combo","keys":["cmd","l"]},\n'
             '    {"intent":"type_text","text":"hello"},\n'
