@@ -10,6 +10,7 @@ from urllib import request as urlrequest
 from urllib.error import URLError
 from typing import Optional, Any
 import csv
+import concurrent.futures
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -21,7 +22,7 @@ from command_controller.controller import CommandController
 from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
-from utils.settings_store import refresh_settings, is_deep_logging
+from utils.settings_store import refresh_settings, is_deep_logging, get_settings
 from utils.runtime_state import get_client_os, set_client_os
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
@@ -143,6 +144,7 @@ def update_settings(payload: dict[str, Any]):
 
     save_json("config/app_settings.json", settings)
     refresh_settings()
+    workflow.apply_runtime_settings(settings)
     return {"status": "ok", "settings": settings}
 
 
@@ -219,12 +221,21 @@ def set_gesture_command(req: SetGestureCommandRequest):
         print(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
     if req.command.strip():
         try:
-            payload = controller.engine.interpreter.interpret(
-                req.command, context={}, supported_intents=ALLOWED_INTENTS
-            )
+            settings = get_settings()
+            timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    controller.engine.interpreter.interpret,
+                    req.command,
+                    {},
+                    ALLOWED_INTENTS,
+                )
+                payload = future.result(timeout=timeout_secs)
             steps = validate_steps(normalize_steps(payload))
             if not steps:
                 raise ValueError("No executable steps returned")
+        except concurrent.futures.TimeoutError:
+            raise HTTPException(status_code=504, detail="Command parsing timed out")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
         if is_deep_logging():

@@ -25,8 +25,10 @@ def refresh_settings() -> dict[str, Any]:
 def get_settings() -> dict[str, Any]:
     """Return a copy of the cached settings."""
     with _lock:
-        if not _settings_cache:
-            refresh_settings()
+        if _settings_cache:
+            return dict(_settings_cache)
+    refresh_settings()
+    with _lock:
         return dict(_settings_cache)
 
 

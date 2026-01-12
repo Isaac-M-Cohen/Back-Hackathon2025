@@ -8,15 +8,13 @@ import os
 import sys
 from pathlib import Path
 from typing import Sequence
-
-import cv2
 from video_module.tflite_pipeline import (
     POINT_HISTORY_LEN,
     calc_landmark_list,
     pre_process_landmark,
     pre_process_point_history,
 )
-from video_module.video_stream import VideoStream
+from utils.settings_store import is_deep_logging
 
 
 def _default_user_data_dir() -> Path:
@@ -62,7 +60,9 @@ class GestureDataset:
     def __init__(self, user_id: str, base_dir: str | Path | None = None) -> None:
         root = Path(base_dir) if base_dir is not None else _default_user_data_dir()
         self.base_dir = root / user_id
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_base_dir_writable()
+        if is_deep_logging():
+            print(f"[DEEP][GESTURE] dataset base_dir={self.base_dir}")
 
         self.keypoint_dir = self.base_dir / "keypoint_classifier"
         self.point_history_dir = self.base_dir / "point_history_classifier"
@@ -85,6 +85,20 @@ class GestureDataset:
         self.command_steps: dict[str, list[dict]] = {}
         self.enabled: set[str] = set()
         self._load_metadata()
+
+    def _ensure_base_dir_writable(self) -> None:
+        try:
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+            probe = self.base_dir / ".write_test"
+            probe.write_text("ok")
+            probe.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            fallback_root = Path.home() / "Library" / "Application Support" / "easy" / "user_data"
+            self.base_dir = fallback_root / self.base_dir.name
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+            if is_deep_logging():
+                print(f"[DEEP][GESTURE] dataset fallback base_dir={self.base_dir}")
 
     def _load_metadata(self) -> None:
         if self.hotkeys_path.exists():
@@ -110,12 +124,24 @@ class GestureDataset:
                 self.enabled = set()
 
     def ensure_presets(self) -> bool:
-        presets_csv = Path("data/presets/keypoint.csv")
-        presets_labels = Path("data/presets/keypoint_classifier_label.csv")
-        point_labels = Path("data/presets/point_history_classifier_label.csv")
-        keypoint_model = Path("data/presets/keypoint_classifier.tflite")
-        point_model = Path("data/presets/point_history_classifier.tflite")
+        presets_root = Path("data/presets")
+        if not presets_root.exists():
+            module_root = Path(__file__).resolve().parents[1]
+            presets_root = module_root / "data" / "presets"
+        presets_csv = presets_root / "keypoint.csv"
+        presets_labels = presets_root / "keypoint_classifier_label.csv"
+        point_labels = presets_root / "point_history_classifier_label.csv"
+        keypoint_model = presets_root / "keypoint_classifier.tflite"
+        point_model = presets_root / "point_history_classifier.tflite"
+        if is_deep_logging():
+            print(f"[DEEP][GESTURE] presets_root={presets_root}")
         if not presets_csv.exists() or not presets_labels.exists():
+            if is_deep_logging():
+                print(
+                    "[DEEP][GESTURE] presets missing "
+                    f"keypoint_csv={presets_csv.exists()} "
+                    f"keypoint_labels={presets_labels.exists()}"
+                )
             return False
         if not self.keypoint_csv.exists():
             self.keypoint_dir.mkdir(parents=True, exist_ok=True)
@@ -276,6 +302,7 @@ class GestureCollector:
         self.show_preview = show_preview
         try:
             import mediapipe as mp
+            import cv2
         except ImportError as exc:
             raise RuntimeError(
                 "MediaPipe is required for gesture collection. Install mediapipe>=0.10."
@@ -285,6 +312,10 @@ class GestureCollector:
             raise RuntimeError(
                 "MediaPipe is missing 'solutions'. Install mediapipe>=0.10 in the active interpreter."
             )
+        from video_module.video_stream import VideoStream
+
+        self._cv2 = cv2
+        self._hand_connections = mp_solutions.hands.HAND_CONNECTIONS
         self.stream = VideoStream(device_index)
         self._hands = mp_solutions.hands.Hands(
             static_image_mode=False,
@@ -306,8 +337,10 @@ class GestureCollector:
                 if not ok or frame is None:
                     print("[COLLECT] Camera read failed")
                     break
-                frame = cv2.flip(frame, 1)
-                results = self._hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                frame = self._cv2.flip(frame, 1)
+                results = self._hands.process(
+                    self._cv2.cvtColor(frame, self._cv2.COLOR_BGR2RGB)
+                )
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
                     landmark_list = calc_landmark_list(frame, hand_landmarks)
@@ -317,25 +350,25 @@ class GestureCollector:
                     self._drawer.draw_landmarks(
                         frame,
                         hand_landmarks,
-                        mp.solutions.hands.HAND_CONNECTIONS,
+                        self._hand_connections,
                     )
                 if self.show_preview:
-                    cv2.putText(
+                    self._cv2.putText(
                         frame,
                         f"{label} frames: {collected}/{target_frames}",
                         (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
+                        self._cv2.FONT_HERSHEY_SIMPLEX,
                         0.7,
                         (0, 255, 0),
                         2,
                     )
-                    cv2.imshow("Collect Static Gesture", frame)
-                    if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                    self._cv2.imshow("Collect Static Gesture", frame)
+                    if (self._cv2.waitKey(1) & 0xFF) == ord("q"):
                         break
         finally:
             self.stream.close()
             if self.show_preview:
-                cv2.destroyAllWindows()
+                self._cv2.destroyAllWindows()
         return collected
 
     def collect_dynamic(
@@ -359,8 +392,10 @@ class GestureCollector:
                     if not ok or frame is None:
                         print("[COLLECT] Camera read failed")
                         return collected
-                    frame = cv2.flip(frame, 1)
-                    results = self._hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    frame = self._cv2.flip(frame, 1)
+                    results = self._hands.process(
+                        self._cv2.cvtColor(frame, self._cv2.COLOR_BGR2RGB)
+                    )
                     if results.multi_hand_landmarks:
                         hand_landmarks = results.multi_hand_landmarks[0]
                         landmark_list = calc_landmark_list(frame, hand_landmarks)
@@ -368,20 +403,20 @@ class GestureCollector:
                         self._drawer.draw_landmarks(
                             frame,
                             hand_landmarks,
-                            mp.solutions.hands.HAND_CONNECTIONS,
+                            self._hand_connections,
                         )
                     if show_preview:
-                        cv2.putText(
+                        self._cv2.putText(
                             frame,
                             f"{label} rep {rep+1}/{repetitions} {len(point_history)}/{POINT_HISTORY_LEN}",
                             (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX,
+                            self._cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
                             (255, 255, 0),
                             2,
                         )
-                        cv2.imshow("Collect Dynamic Gesture", frame)
-                        if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                        self._cv2.imshow("Collect Dynamic Gesture", frame)
+                        if (self._cv2.waitKey(1) & 0xFF) == ord("q"):
                             return collected
 
                 features = pre_process_point_history(frame, point_history)
@@ -390,5 +425,5 @@ class GestureCollector:
         finally:
             self.stream.close()
             if show_preview:
-                cv2.destroyAllWindows()
+                self._cv2.destroyAllWindows()
         return collected
