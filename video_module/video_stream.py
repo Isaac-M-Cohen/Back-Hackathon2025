@@ -1,7 +1,5 @@
 """Thin wrapper around OpenCV VideoCapture."""
 
-import cv2
-
 
 class VideoStream:
     def __init__(self, device_index: int = 0) -> None:
@@ -11,6 +9,8 @@ class VideoStream:
     def open(self) -> None:
         if self._cap is not None:
             return
+
+        import cv2
 
         self._cap = cv2.VideoCapture(self.device_index)
         if not self._cap.isOpened():

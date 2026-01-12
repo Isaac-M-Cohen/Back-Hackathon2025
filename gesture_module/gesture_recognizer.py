@@ -6,12 +6,10 @@ import threading
 import time
 from collections import Counter, deque
 from typing import Optional
-
-import cv2
 from command_controller.controller import CommandController
 from utils.file_utils import load_json
 from utils.settings_store import is_deep_logging
-from video_module import GestureDataset, VideoStream
+from video_module.gesture_ml import GestureDataset
 from video_module.tflite_classifiers import KeyPointClassifier, PointHistoryClassifier
 from video_module.tflite_pipeline import (
     POINT_HISTORY_LEN,
@@ -71,6 +69,8 @@ class RealTimeGestureRecognizer:
                 self._keypoint_classifier = KeyPointClassifier(dataset.keypoint_model_path)
             except Exception as exc:
                 print(f"[GESTURE] Failed to load keypoint model: {exc}")
+        elif is_deep_logging():
+            print(f"[DEEP][GESTURE] Missing keypoint model at {dataset.keypoint_model_path}")
 
         self._point_history_classifier = None
         if dataset.point_history_model_path.exists():
@@ -80,6 +80,8 @@ class RealTimeGestureRecognizer:
                 )
             except Exception as exc:
                 print(f"[GESTURE] Failed to load point history model: {exc}")
+        elif is_deep_logging():
+            print(f"[DEEP][GESTURE] Missing point history model at {dataset.point_history_model_path}")
 
         detection_conf = float(cfg.get("detection_threshold", 0.6))
         tracking_conf = float(cfg.get("min_tracking_confidence", cfg.get("tracking_threshold", 0.6)))
@@ -91,12 +93,21 @@ class RealTimeGestureRecognizer:
             raise RuntimeError(
                 "MediaPipe is required for recognition. Install mediapipe>=0.10."
             ) from exc
+        try:
+            import cv2
+        except ImportError as exc:
+            raise RuntimeError(
+                "OpenCV is required for recognition. Install opencv-python."
+            ) from exc
         mp_solutions = getattr(mp, "solutions", None)
         if mp_solutions is None:
             raise RuntimeError(
                 "MediaPipe is missing 'solutions'. Install mediapipe>=0.10 in the active interpreter."
             )
 
+        from video_module.video_stream import VideoStream
+
+        self._cv2 = cv2
         self.stream = VideoStream(device_index=device_index)
         self._hands = mp_solutions.hands.Hands(
             static_image_mode=False,
@@ -113,6 +124,18 @@ class RealTimeGestureRecognizer:
         self._last_emitted_label: str | None = None
         self._last_emit_time: float = 0.0
         self._last_frame_ts: float = 0.0
+        if is_deep_logging():
+            print(
+                "[DEEP][GESTURE] init "
+                f"labels={len(self._keypoint_labels)} "
+                f"point_history_labels={len(self._point_history_labels)} "
+                f"enabled={len(self.enabled_labels or set())} "
+                f"threshold={self.confidence_threshold:.2f} "
+                f"stable_frames={stable_frames} "
+                f"cooldown={emit_cooldown_secs:.2f}s "
+                f"max_fps={self.max_fps:.1f} "
+                f"watchdog={self.watchdog_timeout_secs:.2f}s"
+            )
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -144,6 +167,8 @@ class RealTimeGestureRecognizer:
         self.stream.open()
         self.active = True
         self._last_frame_ts = time.monotonic()
+        if is_deep_logging() and not self.enabled_labels:
+            print("[DEEP][GESTURE] enabled_labels empty; all detections will be NONE")
         print("[GESTURE] Recognition started — press 'q' to exit.")
         try:
             while self.active and not self._stop_event.is_set():
@@ -159,8 +184,10 @@ class RealTimeGestureRecognizer:
                     break
                 self._last_frame_ts = time.monotonic()
 
-                frame = cv2.flip(frame, 1)
-                results = self._hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                frame = self._cv2.flip(frame, 1)
+                results = self._hands.process(
+                    self._cv2.cvtColor(frame, self._cv2.COLOR_BGR2RGB)
+                )
 
                 label = "NONE"
                 confidence = 0.0
@@ -246,20 +273,20 @@ class RealTimeGestureRecognizer:
                         pass
 
                 if self.show_window:
-                    cv2.putText(
+                    self._cv2.putText(
                         frame,
                         f"{label} ({confidence:.2f})",
                         (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
+                        self._cv2.FONT_HERSHEY_SIMPLEX,
                         0.8,
                         (0, 255, 0) if label != "NONE" else (128, 128, 128),
                         2,
                     )
-                    cv2.imshow(self._window_name, frame)
-                    if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                    self._cv2.imshow(self._window_name, frame)
+                    if (self._cv2.waitKey(1) & 0xFF) == ord("q"):
                         break
                 self._sleep_for_fps(loop_start)
-        except cv2.error as exc:
+        except Exception as exc:
             print(f"[GESTURE] OpenCV error: {exc}")
         finally:
             self._cleanup(join_thread=False)
@@ -313,7 +340,7 @@ class RealTimeGestureRecognizer:
                 pass
         self._closed = True
         if self.show_window:
-            cv2.destroyAllWindows()
+            self._cv2.destroyAllWindows()
         if join_thread and self._thread and threading.current_thread() is not self._thread:
             self._thread.join(timeout=2)
         self._thread = None
@@ -328,3 +355,27 @@ class RealTimeGestureRecognizer:
 
     def set_enabled_labels(self, labels: set[str]) -> None:
         self.enabled_labels = labels
+
+    def apply_runtime_settings(
+        self,
+        *,
+        confidence_threshold: float | None = None,
+        stable_frames: int | None = None,
+        emit_cooldown_secs: float | None = None,
+        emit_actions: bool | None = None,
+        max_fps: float | None = None,
+        watchdog_timeout_secs: float | None = None,
+    ) -> None:
+        if confidence_threshold is not None:
+            self.confidence_threshold = float(confidence_threshold)
+        if stable_frames is not None and stable_frames > 0:
+            history = list(self._keypoint_history)
+            self._keypoint_history = deque(history, maxlen=int(stable_frames))
+        if emit_cooldown_secs is not None:
+            self.emit_cooldown_secs = float(emit_cooldown_secs)
+        if emit_actions is not None:
+            self.emit_actions = bool(emit_actions)
+        if max_fps is not None:
+            self.max_fps = float(max_fps)
+        if watchdog_timeout_secs is not None:
+            self.watchdog_timeout_secs = float(watchdog_timeout_secs)
