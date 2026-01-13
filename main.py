@@ -58,7 +58,8 @@ def _run_tauri(command: str = "tauri:dev") -> None:
     if cargo_bin not in env.get("PATH", ""):
         env["PATH"] = f"{cargo_bin}:{env.get('PATH', '')}"
 
-    cmd = ["npm", "run", command]
+    npm_bin = "npm.cmd" if os.name == "nt" else "npm"
+    cmd = [npm_bin, "run", command]
     subprocess.run(cmd, cwd=webui_dir, env=env, check=True)
 
 
