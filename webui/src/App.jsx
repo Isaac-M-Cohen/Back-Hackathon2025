@@ -63,11 +63,7 @@ export default function GestureControlApp() {
       try {
         await waitForApiReady();
         Api.setClientInfo({ os: detectClientOs() }).catch(() => {});
-        const ready = await waitForDependencies();
-        if (!ready) {
-          setError("Ollama is not running. Please install or start it.");
-        }
-        await refreshGestures();
+        let enableCommands = true;
         try {
           const settings = await Api.getSettings();
           const nextPoll = Number(settings.ui_poll_interval_ms);
@@ -78,9 +74,17 @@ export default function GestureControlApp() {
           if (settings.theme) {
             setThemeMode(settings.theme);
           }
+          if (typeof settings.enable_commands === "boolean") {
+            enableCommands = settings.enable_commands;
+          }
         } catch {
           // Settings are optional.
         }
+        const ready = await waitForDependencies({ requireOllama: enableCommands });
+        if (!ready && enableCommands) {
+          setError("Ollama is not running. Please install or start it.");
+        }
+        await refreshGestures();
         try {
           const { emit } = await import("@tauri-apps/api/event");
           await emit("easy://frontend-ready");
@@ -95,16 +99,20 @@ export default function GestureControlApp() {
     });
   }, []);
 
-  async function waitForDependencies({ timeoutMs = 30000, intervalMs = 500 } = {}) {
+  async function waitForDependencies({
+    timeoutMs = 30000,
+    intervalMs = 500,
+    requireOllama = true,
+  } = {}) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       try {
         const health = await Api.health();
-        if (health && health.ok) {
+        if (health && (health.ok || !requireOllama)) {
           setBootMessage("Ready");
           return true;
         }
-        setBootMessage("Waiting for Ollama...");
+        setBootMessage(requireOllama ? "Waiting for Ollama..." : "Waiting for backend...");
       } catch {
         setBootMessage("Waiting for backend...");
       }
@@ -699,19 +707,22 @@ function SettingsModal({
               />
             </button>
           </div>
-          <div>
-            <DeviceSelectSegmented
-              label="Microphone input"
-              value={micValue}
-              devices={inputDevices}
-              onChange={(value) =>
-                onChange({
-                  ...values,
-                  microphone_device_index: value,
-                })
-              }
-            />
-            <div className="mt-3">
+          <div className="rounded-xl border border-gray-300 bg-gray-100 p-3 space-y-4">
+            <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+              Audio I/O
+            </p>
+            <div className="space-y-3">
+              <DeviceSelectSegmented
+                label="Microphone input"
+                value={micValue}
+                devices={inputDevices}
+                onChange={(value) =>
+                  onChange({
+                    ...values,
+                    microphone_device_index: value,
+                  })
+                }
+              />
               <DeviceSelectSegmented
                 label="Speaker output"
                 value={speakerValue}
@@ -725,7 +736,7 @@ function SettingsModal({
               />
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 p-3 space-y-4">
+          <div className="rounded-xl border border-gray-300 bg-gray-100 p-3 space-y-4">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               Value Settings
             </p>
@@ -733,24 +744,24 @@ function SettingsModal({
           </div>
         </div>
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button
-            onClick={() => onChange({ ...defaultValues })}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-700 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
-          >
-            Reset to defaults
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-700 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-400 text-gray-900 hover:text-gray-900 hover:border-gray-500 hover:bg-gray-50"
-          >
-            Save
-          </button>
+            <button
+              onClick={() => onChange({ ...defaultValues })}
+              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+            >
+              Reset to defaults
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSave}
+              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+            >
+              Save
+            </button>
         </div>
       </div>
     </div>
@@ -808,7 +819,7 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
   return (
     <div>
       <label className="block text-sm text-gray-700">{label}</label>
-      <div className="mt-1 rounded-lg border border-gray-300 p-2 text-sm">
+      <div className="mt-1 rounded-lg border border-gray-300 bg-gray-100 p-2 text-sm">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -817,10 +828,10 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
               setShowPicker(false);
               onChange(null);
             }}
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               mode === "default"
-                ? "bg-gray-900 text-white"
-                : "bg-gray-200 text-gray-700"
+                ? "bg-gray-800 text-white"
+                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
             }`}
           >
             Default
@@ -831,10 +842,10 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
               setMode("pick");
               setShowPicker(true);
             }}
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               mode === "pick"
-                ? "bg-gray-900 text-white"
-                : "bg-gray-200 text-gray-700"
+                ? "bg-gray-800 text-white"
+                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
             }`}
           >
             Pick device
@@ -854,10 +865,10 @@ function DeviceSelectSegmented({ label, value, devices, onChange }) {
                   setShowPicker(false);
                   setMode("pick");
                 }}
-                className={`w-full text-left px-2 py-1 rounded-md text-xs ${
+                className={`w-full text-left px-2 py-1 rounded-md text-xs transition-colors ${
                   device.index === value
-                    ? "bg-gray-200 text-gray-800"
-                    : "hover:bg-gray-100 text-gray-600"
+                    ? "bg-gray-300 text-gray-800"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
                 }`}
               >
                 {device.name}
@@ -929,8 +940,8 @@ function ValueSettingsPresets({ values, onChange }) {
     <div>
       <div className="space-y-3">
         {presets.map((preset) => (
-          <div key={preset.key} className="rounded-lg border border-gray-200 p-2">
-            <div className="flex items-center justify-between text-xs text-gray-600">
+          <div key={preset.key} className="rounded-lg border border-gray-300 bg-gray-50 p-2">
+            <div className="flex items-center justify-between text-xs text-gray-700">
               <span>{preset.label}</span>
               <span>
                 {values[preset.key]} {preset.unit}
@@ -944,10 +955,10 @@ function ValueSettingsPresets({ values, onChange }) {
                   onClick={() =>
                     onChange({ ...values, [preset.key]: option.value })
                   }
-                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     values[preset.key] === option.value
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-200 text-gray-700"
+                      ? "bg-gray-800 text-white"
+                      : "bg-gray-300 text-gray-800 hover:bg-gray-400"
                   }`}
                 >
                   {option.label}
@@ -955,7 +966,7 @@ function ValueSettingsPresets({ values, onChange }) {
               ))}
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <div className="ml-auto flex items-center gap-2 rounded-full border border-gray-300 px-2 py-1">
+              <div className="ml-auto flex items-center gap-2 rounded-full border border-gray-300 bg-gray-100 px-2 py-1">
                 <button
                   type="button"
                   onClick={() =>
@@ -964,7 +975,7 @@ function ValueSettingsPresets({ values, onChange }) {
                       [preset.key]: stepValue(preset, values[preset.key], -1),
                     })
                   }
-                  className="h-6 w-6 rounded-full bg-gray-200 text-gray-700 text-xs"
+                  className="h-6 w-6 rounded-full bg-gray-300 text-gray-800 text-xs hover:bg-gray-400 transition-colors"
                 >
                   -
                 </button>
@@ -979,7 +990,7 @@ function ValueSettingsPresets({ values, onChange }) {
                       [preset.key]: stepValue(preset, values[preset.key], 1),
                     })
                   }
-                  className="h-6 w-6 rounded-full bg-gray-200 text-gray-700 text-xs"
+                  className="h-6 w-6 rounded-full bg-gray-300 text-gray-800 text-xs hover:bg-gray-400 transition-colors"
                 >
                   +
                 </button>
