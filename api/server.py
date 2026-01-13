@@ -29,6 +29,7 @@ USER_ID = os.getenv("GESTURE_USER_ID", "default")
 OLLAMA_URL = os.getenv("EASY_OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_BIN = os.getenv("EASY_OLLAMA_BIN", "ollama")
 OLLAMA_AUTOSTART = os.getenv("EASY_OLLAMA_AUTOSTART", "1") == "1"
+GESTURES_ENABLED = os.getenv("ENABLE_GESTURES", "1") != "0"
 _OLLAMA_CHECKED = False
 
 controller = CommandController(user_id=USER_ID)
@@ -257,6 +258,11 @@ def train():
 
 @app.post("/recognition/start")
 def start_recognition(req: StartRecognitionRequest):
+    if not GESTURES_ENABLED:
+        raise HTTPException(
+            status_code=400,
+            detail="Gesture recognition disabled (set ENABLE_GESTURES=1 to enable).",
+        )
     try:
         settings = load_json("config/app_settings.json")
         stable_frames = req.stable_frames or int(settings.get("recognition_stable_frames", 5))
@@ -310,6 +316,7 @@ def status():
         "recognition_running": workflow.is_recognizing(),
         "user_id": workflow.user_id,
         "client_os": get_client_os(),
+        "gestures_enabled": GESTURES_ENABLED,
     }
 
 
