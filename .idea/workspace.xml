@@ -5,19 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9177b963-cf03-4569-ab04-4a6d4093da51" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SESSION.md" beforeDir="false" afterPath="$PROJECT_DIR$/SESSION.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_hackathon2025.egg-info/PKG-INFO" beforeDir="false" afterPath="$PROJECT_DIR$/back_hackathon2025.egg-info/PKG-INFO" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_hackathon2025.egg-info/SOURCES.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_hackathon2025.egg-info/SOURCES.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_hackathon2025.egg-info/requires.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_hackathon2025.egg-info/requires.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/command_controller/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/executor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/command_controller/llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/llm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config/app_settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/config/app_settings.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/build_tauri_backend.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/build_tauri_backend.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/webui/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src-tauri/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src-tauri/tauri.conf.json" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/tauri.conf.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src/App.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src/App.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src/index.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_module/workflow.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/workflow.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -99,17 +94,6 @@
     </key>
   </component>
   <component name="RunManager" selected="Python.NativeWindow">
-    <configuration default="true" type="JetRunConfigurationType">
-      <module name="Back-Hackathon2025" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
-      <module name="Back-Hackathon2025" />
-      <option name="filePath" />
-      <method v="2" />
-    </configuration>
     <configuration name="WebUI" type="CompoundRunConfigurationType">
       <toRun name="Frontend" type="js.build_tools.npm" />
       <toRun name="Backend" type="PythonConfigurationType" />
@@ -184,8 +168,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-a71380e98a7c-JavaScript-PY-252.28238.29" />
-        <option value="bundled-python-sdk-a101402ee41c-968fe969f28a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.28238.29" />
+        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.27397.103" />
+        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-IU-252.27397.103" />
       </set>
     </attachedChunks>
   </component>
@@ -214,6 +198,7 @@
       <workItem from="1766532130580" duration="97000" />
       <workItem from="1766532232850" duration="15058000" />
       <workItem from="1766580378645" duration="70161000" />
+      <workItem from="1768158352591" duration="2000" />
     </task>
     <servers />
   </component>

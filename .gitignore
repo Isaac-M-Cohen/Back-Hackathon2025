@@ -27,9 +27,12 @@ dist/
 # OS/IDE
 .DS_Store
 .idea/
+.idea/workspace.xml
 .vscode/
 
 # Misc
 webui/EndpointsStructure.txt
 user_data/
 data/user_data/
+hand-gesture-recogniton-mediapipe/
+hand-gesture-recognition-mediapipe/

@@ -6,6 +6,7 @@ from typing import Any
 
 ALLOWED_INTENTS = {
     "open_url",
+    "wait_for_url",
     "open_app",
     "key_combo",
     "type_text",
@@ -51,6 +52,21 @@ def validate_step(step: dict) -> dict:
         if not url:
             raise ValueError("open_url requires 'url'")
         cleaned["url"] = url
+        return cleaned
+
+    if intent == "wait_for_url":
+        url = str(step.get("url", "")).strip()
+        timeout = step.get("timeout_secs", 15)
+        interval = step.get("interval_secs", 0.5)
+        cleaned["url"] = url
+        try:
+            cleaned["timeout_secs"] = float(timeout)
+        except (TypeError, ValueError):
+            raise ValueError("wait_for_url requires numeric 'timeout_secs'")
+        try:
+            cleaned["interval_secs"] = float(interval)
+        except (TypeError, ValueError):
+            raise ValueError("wait_for_url requires numeric 'interval_secs'")
         return cleaned
 
     if intent == "open_app":

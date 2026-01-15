@@ -11,6 +11,9 @@ from utils.settings_store import get_settings, is_deep_logging
 
 
 class Executor:
+    def __init__(self) -> None:
+        self._last_opened_url: str | None = None
+
     def execute(self, action: str, payload: dict) -> None:
         print(f"[EXECUTOR] Performing action='{action}' payload={payload}")
 
@@ -23,7 +26,17 @@ class Executor:
         if intent == "open_url":
             url = step.get("url")
             if url:
+                self._last_opened_url = str(url)
                 webbrowser.open(url)
+            return
+        if intent == "wait_for_url":
+            url = step.get("url") or self._last_opened_url
+            if not url:
+                print("[EXECUTOR] wait_for_url missing url and no previous open_url")
+                return
+            timeout_secs = float(step.get("timeout_secs", 15))
+            interval_secs = float(step.get("interval_secs", 0.5))
+            self._wait_for_url(str(url), timeout_secs=timeout_secs, interval_secs=interval_secs)
             return
         if intent == "open_app":
             app = step.get("app")
@@ -107,3 +120,18 @@ class Executor:
         except Exception:
             return None
         return pyautogui
+
+    def _wait_for_url(self, url: str, *, timeout_secs: float, interval_secs: float) -> None:
+        import time
+        from urllib import request as urlrequest
+        from urllib.error import URLError, HTTPError
+
+        deadline = time.monotonic() + max(0.0, timeout_secs)
+        while time.monotonic() < deadline:
+            try:
+                with urlrequest.urlopen(url, timeout=5) as resp:
+                    if 200 <= resp.status < 400:
+                        return
+            except (URLError, HTTPError):
+                pass
+            time.sleep(max(0.05, interval_secs))
