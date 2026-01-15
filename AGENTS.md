@@ -109,13 +109,30 @@ be the single source of context when resetting a session.
 - Avoid changing unrelated files or generated artifacts.
 - If you touch training, keep input dimensions aligned with 42 (keypoint) and 32 (point history).
 - UI collects gesture samples, then calls training; API endpoints mirror these flows.
+- MediaPipe + TFLite pipeline is in `gesture_module/` + `video_module/`, replacing the scikit pipeline.
+- Other project reference is cloned at repo root: `hand-gesture-recognition-mediapipe`.
 
 ## Testing
 - No formal test suite in repo. For manual checks, run the desktop app or API + web UI.
 
+## Runtime notes (recent)
+- Per-user artifacts live in `user_data/<user_id>/keypoint_classifier` and `user_data/<user_id>/point_history_classifier`, with presets copied from `data/presets`.
+- Default FPS cap is 10.
+- Command execution uses PyAutoGUI; failsafe can trigger if mouse hits screen corners.
+- UI polls `/commands/pending` for pending confirmations.
+
 ## Current working context (session-specific)
 - OS/IDE: macOS (Apple Silicon), using PyCharm; run configs live in `.idea/workspace.xml`.
 - Ensure PyCharm points to the active Python 3.11 interpreter you want to use.
+
+## Session Addendum (Gesture Pipeline + Runtime Notes)
+- Migrated from scikit MLP to MediaPipe + TFLite classifiers (static keypoint + point history). New modules: `video_module/tflite_pipeline.py`, `video_module/tflite_classifiers.py`.
+- Presets/models expected under `data/presets`; defaults copied into `user_data/<user_id>` on startup (prior FileNotFound fix).
+- Added settings: `recognition_fps_cap` default 10; per-command timeout + watchdog configs.
+- TensorFlow kept for notebooks; runtime uses TFLite. MediaPipe >= 0.10 required. Prior TF/protobuf import error fixed; warnings remain.
+- `/commands/pending` polling is for pending command confirmations.
+- Runtime issues to remember: slow first recognition start; duplicate triggers; "NONE|" freeze after commands; PyAutoGUI fail-safe error; LLM latency spikes; copy/paste shortcuts bypass LLM; macOS beeps on command execution; settings changes while camera running not applied immediately; detection too broad (detects all gestures vs enabled ones); commands sometimes not executing; question if Ollama/execution disabled; user asked to flip a boolean to true (no commit).
+- Branches referenced: `command-gestures`/`command_gestures`, `Hand-mouse-implementation`. Prior PR conflicts in `AGENTS.md`, `command_controller/controller.py`, `command_controller/engine.py`, `command_controller/executor.py`, `command_controller/llm.py`, `video_module/gesture_ml.py`, `webui/src/App.jsx`, `webui/src/api.js`.
 
 ## Recent UI changes
 - `ui/main_window.py` replaced with an "Enhanced" UI that matches the web UI styling.
@@ -138,3 +155,10 @@ be the single source of context when resetting a session.
 - Experiments/spikes: `spike/<summary>` or `experiment/<summary>`.
 - Refactoring branches: `refactor/<area>`.
 - Release branches: `release/<version>`.
+
+## Recent integration notes
+- MediaPipe + TFLite pipeline replaced scikit-based gesture ML; models + labels live under `user_data/<user_id>/`.
+- Preset labels + CSVs copied from `data/presets/` into the user dataset on startup.
+- Default setting: `recognition_fps_cap` = 10 in `config/app_settings.json`.
+- `/commands/pending` is polled by the UI to surface command confirmation prompts.
+- PyAutoGUI failsafe triggered once; keep failsafe enabled.
