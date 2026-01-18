@@ -22,6 +22,7 @@ from command_controller.controller import CommandController
 from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
+from utils.log_utils import tprint
 from utils.settings_store import refresh_settings, is_deep_logging, get_settings
 from utils.runtime_state import get_client_os, set_client_os
 
@@ -53,7 +54,7 @@ def _shutdown_cleanup() -> None:
     try:
         workflow.stop_recognition()
     except Exception as exc:
-        print(f"[API] Shutdown cleanup failed: {exc}")
+        tprint(f"[API] Shutdown cleanup failed: {exc}")
 
 
 class StaticGestureRequest(BaseModel):
@@ -218,7 +219,7 @@ def set_gesture_command(req: SetGestureCommandRequest):
     workflow.dataset.set_command(req.label, req.command)
     controller.dataset.set_command(req.label, req.command)
     if is_deep_logging():
-        print(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
+        tprint(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
     if req.command.strip():
         try:
             settings = get_settings()
@@ -239,7 +240,7 @@ def set_gesture_command(req: SetGestureCommandRequest):
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
         if is_deep_logging():
-            print(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
+            tprint(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
         workflow.dataset.set_command_steps(req.label, steps)
         controller.dataset.set_command_steps(req.label, steps)
     else:
@@ -295,7 +296,7 @@ def start_recognition(req: StartRecognitionRequest):
         )
     except RuntimeError as exc:
         # Surface missing model / setup errors as 400 for the UI.
-        print(f"[API] Start recognition failed: {exc}")
+        tprint(f"[API] Start recognition failed: {exc}")
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
@@ -306,7 +307,7 @@ def stop_recognition():
         workflow.stop_recognition()
     except Exception as exc:
         # Prevent a crash from propagating to the UI; log and return ok.
-        print(f"[API] Failed to stop recognition: {exc}")
+        tprint(f"[API] Failed to stop recognition: {exc}")
     return {"status": "ok"}
 
 
@@ -377,7 +378,7 @@ def _try_start_ollama() -> bool:
 @app.get("/health")
 def health():
     global _OLLAMA_CHECKED
-    print("[HEALTH] /health check requested")
+    tprint("[HEALTH] /health check requested")
     ready, err = _ollama_ready()
     if not ready and not _OLLAMA_CHECKED:
         _OLLAMA_CHECKED = True

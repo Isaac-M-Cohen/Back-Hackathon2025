@@ -10,7 +10,8 @@ from command_controller.context import get_context
 from command_controller.engine import CommandEngine
 from command_controller.logger import CommandLogger
 from utils.file_utils import load_json
-from utils.settings_store import is_deep_logging
+from utils.log_utils import tprint
+from utils.settings_store import deep_log
 from video_module.gesture_ml import GestureDataset
 
 
@@ -32,11 +33,10 @@ class CommandController:
     def handle_event(self, source: str, action: str, payload: dict | None = None) -> None:
         """Receive an event from gesture or voice modules and execute it."""
         try:
-            if is_deep_logging():
-                print(f"[DEEP][CTRL] enqueue source={source} action={action} payload={payload}")
+            deep_log(f"[DEEP][CTRL] enqueue source={source} action={action} payload={payload}")
             self._queue.put_nowait((source, action, payload))
         except queue.Full:
-            self.logger.error("Command queue full; dropping event")
+            tprint("[CTRL] Command queue full; dropping event")
 
     def _is_basic_shortcut(self, text: str) -> bool:
         normalized = text.strip().lower()
@@ -75,11 +75,10 @@ class CommandController:
                 self.logger.info(f"No command mapped for gesture '{action}'")
                 return
             if steps:
-                if is_deep_logging():
-                    print(
-                        "[DEEP][CTRL] run_steps "
-                        f"label={action} text={text!r} steps={steps}"
-                    )
+                deep_log(
+                    "[DEEP][CTRL] run_steps "
+                    f"label={action} text={text!r} steps={steps}"
+                )
                 result = self.engine.run_steps(source=source, text=text, steps=steps)
                 self.logger.info(f"Command result: {result.get('status')}")
                 return
@@ -87,11 +86,10 @@ class CommandController:
             text = action
         read_selection = not self._is_basic_shortcut(text)
         context = get_context(read_selection=read_selection)
-        if is_deep_logging():
-            print(
-                "[DEEP][CTRL] run_llm "
-                f"source={source} text={text!r} context={context}"
-            )
+        deep_log(
+            "[DEEP][CTRL] run_llm "
+            f"source={source} text={text!r} context={context}"
+        )
         result = self._run_engine_with_timeout(source=source, text=text, context=context)
         self.logger.info(f"Command result: {result.get('status')}")
 

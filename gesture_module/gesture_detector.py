@@ -1,6 +1,8 @@
 """Detects gestures and forwards them to the command controller."""
 import threading
 
+from utils.log_utils import tprint
+
 from command_controller.controller import CommandController
 from gesture_module.hand_tracking import HandTracker
 
@@ -14,17 +16,17 @@ class GestureDetector:
     def start(self) -> None:
         """Start hand tracking on a separate thread (non-blocking)."""
         if self._thread and self._thread.is_alive():
-            print("[GESTURE] Detector already running (background)")
+            tprint("[GESTURE] Detector already running (background)")
             return
         if self.tracker.active:
-            print("[GESTURE] Detector already running")
+            tprint("[GESTURE] Detector already running")
             return
 
         def _runner() -> None:
             try:
                 self.tracker.start()
             except Exception as exc:  # pragma: no cover - surface runtime issues
-                print(f"[GESTURE] Detector error: {exc}")
+                tprint(f"[GESTURE] Detector error: {exc}")
 
         self._thread = threading.Thread(target=_runner, name="GestureDetector", daemon=False)
         self._thread.start()
@@ -32,9 +34,9 @@ class GestureDetector:
     def start_blocking(self) -> None:
         """Start hand tracking and block until exit."""
         if self.tracker.active:
-            print("[GESTURE] Detector already running")
+            tprint("[GESTURE] Detector already running")
             return
-        print("[GESTURE] Detector starting hand tracker")
+        tprint("[GESTURE] Detector starting hand tracker")
         self.tracker.start()
 
     def stop(self) -> None:

@@ -1,14 +1,11 @@
 """Lightweight logger placeholder for command controller."""
 
-import datetime as _dt
+from utils.log_utils import log
 
 
 class CommandLogger:
-    def _timestamp(self) -> str:
-        return _dt.datetime.now().isoformat(timespec="seconds")
-
     def info(self, message: str) -> None:
-        print(f"[{self._timestamp()}] [INFO] {message}")
+        log("CMD", message, "INFO")
 
     def error(self, message: str) -> None:
-        print(f"[{self._timestamp()}] [ERROR] {message}")
+        log("CMD", message, "ERROR")

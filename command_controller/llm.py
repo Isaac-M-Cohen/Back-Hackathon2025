@@ -10,7 +10,8 @@ from urllib import request
 from urllib.error import URLError
 
 from utils.file_utils import load_json
-from utils.settings_store import get_settings, is_deep_logging
+from utils.log_utils import tprint
+from utils.settings_store import deep_log, get_settings, is_deep_logging
 
 
 class LocalLLMError(RuntimeError):
@@ -53,8 +54,10 @@ class LocalLLMInterpreter:
             raise LocalLLMError(f"Invalid LLM response: {exc}") from exc
 
         output = data.get("response", "")
-        if get_settings().get("log_command_debug") or is_deep_logging():
-            print(f"[LLM] raw_response={output}")
+        if is_deep_logging():
+            deep_log(f"[DEEP][LLM] raw_response={output}")
+        elif get_settings().get("log_command_debug"):
+            tprint(f"[LLM] raw_response={output}")
         parsed = self._extract_json(output)
         if parsed is None:
             raise LocalLLMError("LLM did not return valid JSON")

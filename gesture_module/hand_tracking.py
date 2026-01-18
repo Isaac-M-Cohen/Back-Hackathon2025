@@ -1,6 +1,8 @@
 """Hand tracking implementation using OpenCV + MediaPipe."""
 
 import cv2
+
+from utils.log_utils import tprint
 import mediapipe as mp
 
 from utils.file_utils import load_json
@@ -43,14 +45,14 @@ class HandTracker:
             raise RuntimeError(f"[HAND] Unable to open camera: {exc}") from exc
 
         self.active = True
-        print("[HAND] Tracking started — press 'q' to exit.")
+        tprint("[HAND] Tracking started — press 'q' to exit.")
         try:
             self._run_loop()
         except KeyboardInterrupt:
-            print("[HAND] Interrupted by user.")
+            tprint("[HAND] Interrupted by user.")
         except Exception as exc:
             # Catch OpenCV C++ exceptions to avoid unhelpful crashes.
-            print(f"[HAND] Tracking error: {exc}")
+            tprint(f"[HAND] Tracking error: {exc}")
         finally:
             self.stop()
 
@@ -62,7 +64,7 @@ class HandTracker:
             try:
                 ok, frame = self._cap.read()
                 if not ok or frame is None:
-                    print("[HAND] Failed to read from camera.")
+                    tprint("[HAND] Failed to read from camera.")
                     break
 
                 frame = cv2.flip(frame, 1)  # Mirror for user-friendly view.
@@ -85,7 +87,7 @@ class HandTracker:
                 if key == ord("q"):
                     break
             except cv2.error as exc:
-                print(f"[HAND] OpenCV error: {exc}")
+                tprint(f"[HAND] OpenCV error: {exc}")
                 break
 
     def stop(self) -> None:
@@ -93,4 +95,4 @@ class HandTracker:
         self._cap.close()
         self._hands.close()
         cv2.destroyAllWindows()
-        print("[HAND] Tracking stopped")
+        tprint("[HAND] Tracking stopped")
