@@ -14,7 +14,8 @@ from video_module.tflite_pipeline import (
     pre_process_landmark,
     pre_process_point_history,
 )
-from utils.settings_store import is_deep_logging
+from utils.log_utils import tprint
+from utils.settings_store import deep_log, is_deep_logging
 
 
 def _default_user_data_dir() -> Path:
@@ -61,8 +62,7 @@ class GestureDataset:
         root = Path(base_dir) if base_dir is not None else _default_user_data_dir()
         self.base_dir = root / user_id
         self._ensure_base_dir_writable()
-        if is_deep_logging():
-            print(f"[DEEP][GESTURE] dataset base_dir={self.base_dir}")
+        deep_log(f"[DEEP][GESTURE] dataset base_dir={self.base_dir}")
 
         self.keypoint_dir = self.base_dir / "keypoint_classifier"
         self.point_history_dir = self.base_dir / "point_history_classifier"
@@ -97,8 +97,7 @@ class GestureDataset:
             fallback_root = Path.home() / "Library" / "Application Support" / "easy" / "user_data"
             self.base_dir = fallback_root / self.base_dir.name
             self.base_dir.mkdir(parents=True, exist_ok=True)
-            if is_deep_logging():
-                print(f"[DEEP][GESTURE] dataset fallback base_dir={self.base_dir}")
+            deep_log(f"[DEEP][GESTURE] dataset fallback base_dir={self.base_dir}")
 
     def _load_metadata(self) -> None:
         if self.hotkeys_path.exists():
@@ -133,15 +132,13 @@ class GestureDataset:
         point_labels = presets_root / "point_history_classifier_label.csv"
         keypoint_model = presets_root / "keypoint_classifier.tflite"
         point_model = presets_root / "point_history_classifier.tflite"
-        if is_deep_logging():
-            print(f"[DEEP][GESTURE] presets_root={presets_root}")
+        deep_log(f"[DEEP][GESTURE] presets_root={presets_root}")
         if not presets_csv.exists() or not presets_labels.exists():
-            if is_deep_logging():
-                print(
-                    "[DEEP][GESTURE] presets missing "
-                    f"keypoint_csv={presets_csv.exists()} "
-                    f"keypoint_labels={presets_labels.exists()}"
-                )
+            deep_log(
+                "[DEEP][GESTURE] presets missing "
+                f"keypoint_csv={presets_csv.exists()} "
+                f"keypoint_labels={presets_labels.exists()}"
+            )
             return False
         if not self.keypoint_csv.exists():
             self.keypoint_dir.mkdir(parents=True, exist_ok=True)
@@ -330,12 +327,12 @@ class GestureCollector:
     ) -> int:
         collected = 0
         self.stream.open()
-        print(f"[COLLECT] Static gesture='{label}' target_frames={target_frames}")
+        tprint(f"[COLLECT] Static gesture='{label}' target_frames={target_frames}")
         try:
             while collected < target_frames:
                 ok, frame = self.stream.read()
                 if not ok or frame is None:
-                    print("[COLLECT] Camera read failed")
+                    tprint("[COLLECT] Camera read failed")
                     break
                 frame = self._cv2.flip(frame, 1)
                 results = self._hands.process(
@@ -381,7 +378,7 @@ class GestureCollector:
     ) -> int:
         collected = 0
         self.stream.open()
-        print(f"[COLLECT] Dynamic gesture='{label}' repetitions={repetitions}")
+        tprint(f"[COLLECT] Dynamic gesture='{label}' repetitions={repetitions}")
         if show_preview is None:
             show_preview = self.show_preview
         try:
@@ -390,7 +387,7 @@ class GestureCollector:
                 while len(point_history) < POINT_HISTORY_LEN:
                     ok, frame = self.stream.read()
                     if not ok or frame is None:
-                        print("[COLLECT] Camera read failed")
+                        tprint("[COLLECT] Camera read failed")
                         return collected
                     frame = self._cv2.flip(frame, 1)
                     results = self._hands.process(

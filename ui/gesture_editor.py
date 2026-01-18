@@ -1,6 +1,8 @@
 """UI placeholder for gesture editor."""
 
+from utils.log_utils import tprint
+
 
 class GestureEditor:
     def open(self) -> None:
-        print("[UI] Gesture editor opened")
+        tprint("[UI] Gesture editor opened")

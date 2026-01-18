@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from utils.file_utils import load_json
+from utils.log_utils import tprint
 
 _lock = threading.Lock()
 _settings_cache: dict[str, Any] = {}
@@ -36,3 +37,10 @@ def is_deep_logging() -> bool:
     """Return True when log_level requests deep tracing."""
     level = str(get_settings().get("log_level", "")).upper()
     return level in {"DEEP"}
+
+
+def deep_log(message: str) -> None:
+    """Log a deep-trace message with a timestamp when enabled."""
+    if not is_deep_logging():
+        return
+    tprint(message)

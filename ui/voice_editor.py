@@ -1,6 +1,8 @@
 """UI placeholder for voice command editor."""
 
+from utils.log_utils import tprint
+
 
 class VoiceEditor:
     def open(self) -> None:
-        print("[UI] Voice editor opened")
+        tprint("[UI] Voice editor opened")

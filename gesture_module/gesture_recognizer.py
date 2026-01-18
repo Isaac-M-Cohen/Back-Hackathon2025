@@ -8,7 +8,8 @@ from collections import Counter, deque
 from typing import Optional
 from command_controller.controller import CommandController
 from utils.file_utils import load_json
-from utils.settings_store import is_deep_logging
+from utils.log_utils import tprint
+from utils.settings_store import deep_log, is_deep_logging
 from video_module.gesture_ml import GestureDataset
 from video_module.tflite_classifiers import KeyPointClassifier, PointHistoryClassifier
 from video_module.tflite_pipeline import (
@@ -68,9 +69,9 @@ class RealTimeGestureRecognizer:
             try:
                 self._keypoint_classifier = KeyPointClassifier(dataset.keypoint_model_path)
             except Exception as exc:
-                print(f"[GESTURE] Failed to load keypoint model: {exc}")
+                tprint(f"[GESTURE] Failed to load keypoint model: {exc}")
         elif is_deep_logging():
-            print(f"[DEEP][GESTURE] Missing keypoint model at {dataset.keypoint_model_path}")
+            deep_log(f"[DEEP][GESTURE] Missing keypoint model at {dataset.keypoint_model_path}")
 
         self._point_history_classifier = None
         if dataset.point_history_model_path.exists():
@@ -79,9 +80,9 @@ class RealTimeGestureRecognizer:
                     dataset.point_history_model_path
                 )
             except Exception as exc:
-                print(f"[GESTURE] Failed to load point history model: {exc}")
+                tprint(f"[GESTURE] Failed to load point history model: {exc}")
         elif is_deep_logging():
-            print(f"[DEEP][GESTURE] Missing point history model at {dataset.point_history_model_path}")
+            deep_log(f"[DEEP][GESTURE] Missing point history model at {dataset.point_history_model_path}")
 
         detection_conf = float(cfg.get("detection_threshold", 0.6))
         tracking_conf = float(cfg.get("min_tracking_confidence", cfg.get("tracking_threshold", 0.6)))
@@ -124,25 +125,24 @@ class RealTimeGestureRecognizer:
         self._last_emitted_label: str | None = None
         self._last_emit_time: float = 0.0
         self._last_frame_ts: float = 0.0
-        if is_deep_logging():
-            print(
-                "[DEEP][GESTURE] init "
-                f"labels={len(self._keypoint_labels)} "
-                f"point_history_labels={len(self._point_history_labels)} "
-                f"enabled={len(self.enabled_labels or set())} "
-                f"threshold={self.confidence_threshold:.2f} "
-                f"stable_frames={stable_frames} "
-                f"cooldown={emit_cooldown_secs:.2f}s "
-                f"max_fps={self.max_fps:.1f} "
-                f"watchdog={self.watchdog_timeout_secs:.2f}s"
-            )
+        deep_log(
+            "[DEEP][GESTURE] init "
+            f"labels={len(self._keypoint_labels)} "
+            f"point_history_labels={len(self._point_history_labels)} "
+            f"enabled={len(self.enabled_labels or set())} "
+            f"threshold={self.confidence_threshold:.2f} "
+            f"stable_frames={stable_frames} "
+            f"cooldown={emit_cooldown_secs:.2f}s "
+            f"max_fps={self.max_fps:.1f} "
+            f"watchdog={self.watchdog_timeout_secs:.2f}s"
+        )
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
-            print("[GESTURE] Recognizer already running (background)")
+            tprint("[GESTURE] Recognizer already running (background)")
             return
         if self.active:
-            print("[GESTURE] Recognizer already running")
+            tprint("[GESTURE] Recognizer already running")
             return
         self._stop_event.clear()
 
@@ -150,7 +150,7 @@ class RealTimeGestureRecognizer:
             try:
                 self._run_loop()
             except Exception as exc:  # pragma: no cover
-                print(f"[GESTURE] Recognizer error: {exc}")
+                tprint(f"[GESTURE] Recognizer error: {exc}")
             finally:
                 self._cleanup(join_thread=False)
 
@@ -159,7 +159,7 @@ class RealTimeGestureRecognizer:
 
     def start_blocking(self) -> None:
         if self.active:
-            print("[GESTURE] Recognizer already running")
+            tprint("[GESTURE] Recognizer already running")
             return
         self._run_loop()
 
@@ -168,19 +168,19 @@ class RealTimeGestureRecognizer:
         self.active = True
         self._last_frame_ts = time.monotonic()
         if is_deep_logging() and not self.enabled_labels:
-            print("[DEEP][GESTURE] enabled_labels empty; all detections will be NONE")
-        print("[GESTURE] Recognition started — press 'q' to exit.")
+            deep_log("[DEEP][GESTURE] enabled_labels empty; all detections will be NONE")
+        tprint("[GESTURE] Recognition started — press 'q' to exit.")
         try:
             while self.active and not self._stop_event.is_set():
                 if self.watchdog_timeout_secs > 0:
                     stalled_for = time.monotonic() - self._last_frame_ts
                     if stalled_for > self.watchdog_timeout_secs:
-                        print("[GESTURE] Watchdog triggered; stopping recognition.")
+                        tprint("[GESTURE] Watchdog triggered; stopping recognition.")
                         break
                 loop_start = time.monotonic()
                 ok, frame = self.stream.read()
                 if not ok or frame is None:
-                    print("[GESTURE] Failed to read from camera.")
+                    tprint("[GESTURE] Failed to read from camera.")
                     break
                 self._last_frame_ts = time.monotonic()
 
@@ -251,7 +251,7 @@ class RealTimeGestureRecognizer:
                     in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
                     if (emit_label != self._last_emitted_label) and not in_cooldown:
                         if is_deep_logging():
-                            print(
+                            deep_log(
                                 "[DEEP][GESTURE] emit "
                                 f"label={emit_label} confidence={confidence:.3f} "
                                 f"cooldown={self.emit_cooldown_secs:.2f}s"
@@ -287,7 +287,7 @@ class RealTimeGestureRecognizer:
                         break
                 self._sleep_for_fps(loop_start)
         except Exception as exc:
-            print(f"[GESTURE] OpenCV error: {exc}")
+            tprint(f"[GESTURE] OpenCV error: {exc}")
         finally:
             self._cleanup(join_thread=False)
 
@@ -322,10 +322,10 @@ class RealTimeGestureRecognizer:
         if self._thread and self._thread.is_alive() and threading.current_thread() is not self._thread:
             self._thread.join(timeout=5)
         if self._thread and self._thread.is_alive():
-            print("[GESTURE] Recognition stop timed out; thread still running")
+            tprint("[GESTURE] Recognition stop timed out; thread still running")
             return
         self._cleanup(join_thread=False)
-        print("[GESTURE] Recognition stopped")
+        tprint("[GESTURE] Recognition stopped")
 
     def _cleanup(self, join_thread: bool) -> None:
         if self._closed:

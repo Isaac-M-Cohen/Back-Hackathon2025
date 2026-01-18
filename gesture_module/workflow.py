@@ -6,6 +6,7 @@ This keeps the camera closed until explicitly invoked by the UI/consumer.
 from __future__ import annotations
 
 from command_controller.controller import CommandController
+from utils.log_utils import tprint
 from video_module.gesture_ml import GestureCollector, GestureDataset
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -70,7 +71,7 @@ class GestureWorkflow:
         from gesture_module.gesture_recognizer import RealTimeGestureRecognizer
 
         if self._recognizer and self._recognizer.is_running():
-            print("[GESTURE] Recognizer already running")
+            tprint("[GESTURE] Recognizer already running")
             return
         self._recognizer = RealTimeGestureRecognizer(
             controller,

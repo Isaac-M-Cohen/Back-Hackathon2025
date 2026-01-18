@@ -9,6 +9,7 @@ import os
 from typing import AsyncIterable, Iterable
 
 import websockets
+from utils.log_utils import tprint
 from voice_module.stt_whisperlive import WhisperLiveClient
 from voice_module.stt_whisper_local import WhisperLocalEngine
 
@@ -157,7 +158,7 @@ class SpeechToTextEngine:
             event_type = event.get("type")
 
             if self.debug:
-                print(f"[VOICE][DEBUG] event: {event_type} payload={event}")
+                tprint(f"[VOICE][DEBUG] event: {event_type} payload={event}")
 
             if event_type and "error" in event_type:
                 message = event.get("message") or event.get("error", "")
