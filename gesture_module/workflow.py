@@ -123,10 +123,11 @@ class GestureWorkflow:
             watchdog_timeout_secs=watchdog_secs,
         )
 
-    def _record_detection(self, *, label: str, confidence: float) -> None:
+    def _record_detection(self, *, label: str, confidence: float, direction: str = "") -> None:
         self._last_detection = {
             "label": label,
             "confidence": confidence,
+            "direction": direction,
         }
 
     def last_detection(self) -> dict | None:

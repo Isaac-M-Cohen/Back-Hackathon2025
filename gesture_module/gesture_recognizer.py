@@ -6,6 +6,7 @@ import threading
 import time
 from collections import Counter, deque
 from typing import Optional
+import numpy as np
 from command_controller.controller import CommandController
 from utils.file_utils import load_json
 from utils.log_utils import tprint
@@ -19,6 +20,37 @@ from video_module.tflite_pipeline import (
     pre_process_landmark,
     pre_process_point_history,
 )
+
+
+def calc_hand_facing_direction(hand_landmarks, handedness) -> str:
+    wrist = hand_landmarks.landmark[0]
+    index_mcp = hand_landmarks.landmark[5]
+    pinky_mcp = hand_landmarks.landmark[17]
+
+    v1 = np.array(
+        [index_mcp.x - wrist.x, index_mcp.y - wrist.y, index_mcp.z - wrist.z]
+    )
+    v2 = np.array(
+        [pinky_mcp.x - wrist.x, pinky_mcp.y - wrist.y, pinky_mcp.z - wrist.z]
+    )
+    normal = np.cross(v1, v2)
+
+    if handedness and handedness.classification:
+        if handedness.classification[0].label == "Left":
+            normal = -normal
+
+    norm = np.linalg.norm(normal)
+    if norm < 1e-6:
+        return "Unknown"
+
+    normal = normal / norm
+    axis = int(np.argmax(np.abs(normal)))
+
+    if axis == 2:
+        return "Camera" if normal[2] < 0 else "Away"
+    if axis == 0:
+        return "Right" if normal[0] > 0 else "Left"
+    return "Down" if normal[1] > 0 else "Up"
 
 
 class RealTimeGestureRecognizer:
@@ -191,8 +223,13 @@ class RealTimeGestureRecognizer:
 
                 label = "NONE"
                 confidence = 0.0
+                facing_text = ""
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
+                    handedness = None
+                    if results.multi_handedness:
+                        handedness = results.multi_handedness[0]
+                    facing_text = calc_hand_facing_direction(hand_landmarks, handedness)
                     landmark_list = calc_landmark_list(frame, hand_landmarks)
                     pre_processed_landmark_list = pre_process_landmark(landmark_list)
                     keypoint_id = -1
@@ -243,6 +280,7 @@ class RealTimeGestureRecognizer:
                 else:
                     self._point_history.zeros()
                     label, confidence = "NONE", 0.0
+                    facing_text = ""
 
                 emit_label = label if self._is_enabled(label) else "NONE"
 
@@ -268,7 +306,9 @@ class RealTimeGestureRecognizer:
                 if self.on_detection:
                     try:
                         # Report only enabled labels (or NONE) for UI status.
-                        self.on_detection(label=emit_label, confidence=confidence)
+                        self.on_detection(
+                            label=emit_label, confidence=confidence, direction=facing_text
+                        )
                     except Exception:
                         pass
 
@@ -282,6 +322,16 @@ class RealTimeGestureRecognizer:
                         (0, 255, 0) if label != "NONE" else (128, 128, 128),
                         2,
                     )
+                    if facing_text:
+                        self._cv2.putText(
+                            frame,
+                            f"Facing: {facing_text}",
+                            (10, 60),
+                            self._cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (0, 255, 0) if label != "NONE" else (128, 128, 128),
+                            2,
+                        )
                     self._cv2.imshow(self._window_name, frame)
                     if (self._cv2.waitKey(1) & 0xFF) == ord("q"):
                         break
