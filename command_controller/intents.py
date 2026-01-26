@@ -11,6 +11,8 @@ ALLOWED_INTENTS = {
     "key_combo",
     "type_text",
     "scroll",
+    "mouse_move",
+    "click",
 }
 
 KEY_ALIASES = {
@@ -111,6 +113,36 @@ def validate_step(step: dict) -> dict:
             raise ValueError("scroll requires integer 'amount'")
         cleaned["direction"] = direction
         cleaned["amount"] = max(1, amount_int)
+        return cleaned
+
+    if intent == "mouse_move":
+        x = step.get("x")
+        y = step.get("y")
+        if x is None or y is None:
+            raise ValueError("mouse_move requires 'x' and 'y' coordinates")
+        try:
+            x_int = int(x)
+        except (TypeError, ValueError):
+            raise ValueError("mouse_move requires integer 'x'")
+        try:
+            y_int = int(y)
+        except (TypeError, ValueError):
+            raise ValueError("mouse_move requires integer 'y'")
+        cleaned["x"] = x_int
+        cleaned["y"] = y_int
+        return cleaned
+
+    if intent == "click":
+        button = str(step.get("button", "left")).strip().lower()
+        if button not in {"left", "right", "middle"}:
+            raise ValueError("click button must be 'left', 'right', or 'middle'")
+        clicks = step.get("clicks", 1)
+        try:
+            clicks_int = int(clicks)
+        except (TypeError, ValueError):
+            raise ValueError("click requires integer 'clicks'")
+        cleaned["button"] = button
+        cleaned["clicks"] = max(1, clicks_int)
         return cleaned
 
     raise ValueError(f"Unsupported intent '{intent}'")

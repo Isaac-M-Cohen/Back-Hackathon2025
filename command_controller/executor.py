@@ -36,6 +36,16 @@ class Executor:
         if handler:
             handler(step)
             return
+        if intent == "mouse_move":
+            x = int(step.get("x", 0))
+            y = int(step.get("y", 0))
+            self._mouse_move(x, y)
+            return
+        if intent == "click":
+            button = step.get("button", "left")
+            clicks = int(step.get("clicks", 1))
+            self._click(button, clicks)
+            return
         tprint(f"[EXECUTOR] Unknown intent '{intent}'")
 
     def _handle_open_url(self, step: dict) -> None:
@@ -132,6 +142,28 @@ class Executor:
         elif get_settings().get("log_command_debug"):
             tprint(f"[EXECUTOR][pyautogui] scroll delta={delta}")
         automation.scroll(delta if direction == "up" else -delta)
+
+    def _mouse_move(self, x: int, y: int) -> None:
+        automation = self._automation()
+        if not automation:
+            tprint("[EXECUTOR] pyautogui not available; mouse_move skipped")
+            return
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] pyautogui moveTo x={x} y={y}")
+        elif get_settings().get("log_command_debug"):
+            tprint(f"[EXECUTOR][pyautogui] moveTo x={x} y={y}")
+        automation.moveTo(x, y)
+
+    def _click(self, button: str, clicks: int) -> None:
+        automation = self._automation()
+        if not automation:
+            tprint("[EXECUTOR] pyautogui not available; click skipped")
+            return
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] pyautogui click button={button} clicks={clicks}")
+        elif get_settings().get("log_command_debug"):
+            tprint(f"[EXECUTOR][pyautogui] click button={button} clicks={clicks}")
+        automation.click(button=button, clicks=clicks)
 
     def _automation(self):
         try:

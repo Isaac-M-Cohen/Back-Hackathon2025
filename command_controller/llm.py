@@ -83,7 +83,9 @@ class LocalLLMInterpreter:
             '    {"intent":"open_app","app":"App Name"},\n'
             '    {"intent":"key_combo","keys":["cmd","l"]},\n'
             '    {"intent":"type_text","text":"hello"},\n'
-            '    {"intent":"scroll","direction":"down","amount":3}\n'
+            '    {"intent":"scroll","direction":"down","amount":3},\n'
+            '    {"intent":"mouse_move","x":100,"y":200},\n'
+            '    {"intent":"click","button":"left","clicks":1}\n'
             "  ]\n"
             "}\n"
             "Rules:\n"
@@ -91,6 +93,7 @@ class LocalLLMInterpreter:
             "- Use the smallest number of steps.\n"
             "- If the request is ambiguous, return an empty steps list.\n"
             "- For copy/paste/cut/undo/redo/select all, use key_combo with cmd on macOS or ctrl on Windows.\n"
+            "- Use mouse_move and click for multi-step workflows that require precise cursor positioning.\n"
             f"Context: {context_json}\n"
             f"Request: {text}"
         )
