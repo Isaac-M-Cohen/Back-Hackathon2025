@@ -22,6 +22,9 @@ from video_module.tflite_pipeline import (
 )
 
 
+CAMERA_FACING_GESTURES = {"Open", "Close", "Pointer", "OK"}
+
+
 def calc_hand_facing_direction(hand_landmarks, handedness) -> str:
     wrist = hand_landmarks.landmark[0]
     index_mcp = hand_landmarks.landmark[5]
@@ -284,6 +287,9 @@ class RealTimeGestureRecognizer:
 
                 emit_label = label if self._is_enabled(label) else "NONE"
 
+                if emit_label in CAMERA_FACING_GESTURES and facing_text != "Camera":
+                    emit_label = "NONE"
+
                 if emit_label != "NONE":
                     now = time.monotonic()
                     in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
@@ -292,11 +298,12 @@ class RealTimeGestureRecognizer:
                             deep_log(
                                 "[DEEP][GESTURE] emit "
                                 f"label={emit_label} confidence={confidence:.3f} "
+                                f"direction={facing_text} "
                                 f"cooldown={self.emit_cooldown_secs:.2f}s"
                             )
                         if self.emit_actions:
                             self.controller.handle_event(
-                                source="gesture", action=emit_label, payload={"confidence": confidence}
+                                source="gesture", action=emit_label, payload={"confidence": confidence, "direction": facing_text}
                             )
                         self._last_emitted_label = emit_label
                         self._last_emit_time = now
