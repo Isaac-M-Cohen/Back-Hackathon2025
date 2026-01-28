@@ -1,8 +1,11 @@
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Listener, Manager, Wry};
@@ -96,8 +99,8 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<(String, Child), Box<dyn std::
         let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..");
-        let child = Command::new(python)
-            .args([
+        let mut cmd = Command::new(python);
+        cmd.args([
                 "-m",
                 "uvicorn",
                 "api.server:app",
@@ -107,16 +110,28 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<(String, Child), Box<dyn std::
                 &port.to_string(),
             ])
             .current_dir(repo_root)
-            .spawn()?;
+            .stdin(Stdio::null());
+
+        // On macOS/Unix, create a new process group so the Python process
+        // doesn't inherit the terminal/dock association from the parent
+        #[cfg(unix)]
+        cmd.process_group(0);
+
+        let child = cmd.spawn()?;
         wait_for_backend(host, port, Duration::from_secs(20))?;
         app.manage(api_base.clone());
         return Ok((api_base, child));
     } else {
-      let backend_path = resolve_backend_path(app)?;
-        let child = Command::new(backend_path)
-            .env("EASY_API_HOST", host)
+        let backend_path = resolve_backend_path(app)?;
+        let mut cmd = Command::new(backend_path);
+        cmd.env("EASY_API_HOST", host)
             .env("EASY_API_PORT", port.to_string())
-            .spawn()?;
+            .stdin(Stdio::null());
+
+        #[cfg(unix)]
+        cmd.process_group(0);
+
+        let child = cmd.spawn()?;
         wait_for_backend(host, port, Duration::from_secs(20))?;
         app.manage(api_base.clone());
         return Ok((api_base, child));
