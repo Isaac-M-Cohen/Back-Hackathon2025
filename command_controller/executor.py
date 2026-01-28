@@ -28,7 +28,7 @@ class Executor:
             url = step.get("url")
             if url:
                 self._last_opened_url = str(url)
-                webbrowser.open(url)
+                self._open_url(url)
             return
         if intent == "wait_for_url":
             url = step.get("url") or self._last_opened_url
@@ -70,6 +70,37 @@ class Executor:
             return
         tprint(f"[EXECUTOR] Unknown intent '{intent}'")
 
+    def _open_url(self, url: str) -> None:
+        """Open a URL in the default browser, avoiding Python Launcher on macOS."""
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] _open_url url={url} platform={sys.platform}")
+        if sys.platform == "darwin":
+            # Use native 'open' command on macOS to avoid Python Launcher issue
+            # Use Popen to avoid blocking and DEVNULL to prevent stdio handling
+            subprocess.Popen(
+                ["open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        if os.name == "nt":
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                shell=True,
+            )
+            return
+        # Linux/Unix: try xdg-open first, fall back to webbrowser
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            webbrowser.open(url)
+
     def _open_app(self, app: str) -> None:
         if os.name == "nt":
             subprocess.run(["cmd", "/c", "start", "", app], check=False)
@@ -80,18 +111,59 @@ class Executor:
         subprocess.run(["xdg-open", app], check=False)
 
     def _hotkey(self, keys: list[str]) -> None:
+        normalized = self._normalize_keys(keys)
+        settings = get_settings()
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] hotkey keys={normalized}")
+        elif settings.get("log_command_debug"):
+            tprint(f"[EXECUTOR] hotkey keys={normalized}")
+
+        # On macOS, use AppleScript to avoid Python appearing in dock
+        if sys.platform == "darwin":
+            self._hotkey_applescript(normalized)
+            return
+
         automation = self._automation()
         if not automation:
             tprint("[EXECUTOR] pyautogui not available; key_combo skipped")
             return
-        normalized = self._normalize_keys(keys)
-        settings = get_settings()
-        if is_deep_logging():
-            deep_log(f"[DEEP][EXECUTOR] pyautogui hotkey args={normalized}")
-        elif settings.get("log_command_debug"):
-            tprint(f"[EXECUTOR][pyautogui] hotkey args={normalized}")
         interval = float(settings.get("command_hotkey_interval_secs", 0.05))
         automation.hotkey(*normalized, interval=interval)
+
+    def _hotkey_applescript(self, keys: list[str]) -> None:
+        """Execute hotkey using AppleScript on macOS to avoid dock promotion."""
+        if not keys:
+            return
+        # Map key names to AppleScript key codes
+        key_map = {
+            "command": "command down",
+            "cmd": "command down",
+            "control": "control down",
+            "ctrl": "control down",
+            "alt": "option down",
+            "option": "option down",
+            "shift": "shift down",
+        }
+        modifiers = []
+        key_to_press = None
+        for k in keys:
+            k_lower = k.lower()
+            if k_lower in key_map:
+                modifiers.append(key_map[k_lower])
+            else:
+                key_to_press = k
+        if not key_to_press:
+            return
+        modifier_str = ", ".join(modifiers) if modifiers else ""
+        if modifier_str:
+            script = f'tell application "System Events" to keystroke "{key_to_press}" using {{{modifier_str}}}'
+        else:
+            script = f'tell application "System Events" to keystroke "{key_to_press}"'
+        subprocess.Popen(
+            ["osascript", "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _normalize_keys(self, keys: list[str]) -> list[str]:
         if not keys:
@@ -109,27 +181,67 @@ class Executor:
         return mapped
 
     def _type_text(self, text: str) -> None:
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] type_text text={text!r}")
+        elif get_settings().get("log_command_debug"):
+            tprint(f"[EXECUTOR] type_text text={text!r}")
+
+        # On macOS, use AppleScript to avoid Python appearing in dock
+        if sys.platform == "darwin":
+            self._type_text_applescript(text)
+            return
+
         automation = self._automation()
         if not automation:
             tprint("[EXECUTOR] pyautogui not available; type_text skipped")
             return
-        if is_deep_logging():
-            deep_log(f"[DEEP][EXECUTOR] pyautogui write text={text!r}")
-        elif get_settings().get("log_command_debug"):
-            tprint(f"[EXECUTOR][pyautogui] write text={text!r}")
         automation.write(text, interval=0.02)
 
+    def _type_text_applescript(self, text: str) -> None:
+        """Type text using AppleScript on macOS to avoid dock promotion."""
+        # Escape special characters for AppleScript
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'tell application "System Events" to keystroke "{escaped}"'
+        subprocess.Popen(
+            ["osascript", "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     def _scroll(self, direction: str, amount: int) -> None:
+        delta = amount * 100
+        if is_deep_logging():
+            deep_log(f"[DEEP][EXECUTOR] scroll direction={direction} delta={delta}")
+        elif get_settings().get("log_command_debug"):
+            tprint(f"[EXECUTOR] scroll direction={direction} delta={delta}")
+
+        # On macOS, use AppleScript to avoid Python appearing in dock
+        if sys.platform == "darwin":
+            self._scroll_applescript(direction, amount)
+            return
+
         automation = self._automation()
         if not automation:
             tprint("[EXECUTOR] pyautogui not available; scroll skipped")
             return
-        delta = amount * 100
-        if is_deep_logging():
-            deep_log(f"[DEEP][EXECUTOR] pyautogui scroll delta={delta}")
-        elif get_settings().get("log_command_debug"):
-            tprint(f"[EXECUTOR][pyautogui] scroll delta={delta}")
         automation.scroll(delta if direction == "up" else -delta)
+
+    def _scroll_applescript(self, direction: str, amount: int) -> None:
+        """Scroll using AppleScript on macOS to avoid dock promotion."""
+        # AppleScript scroll: negative for down, positive for up
+        scroll_amount = amount if direction == "up" else -amount
+        script = f'''
+        tell application "System Events"
+            repeat {abs(amount)} times
+                key code {116 if direction == "up" else 121}
+            end repeat
+        end tell
+        '''
+        subprocess.Popen(
+            ["osascript", "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _mouse_move(self, x: int, y: int) -> None:
         automation = self._automation()

@@ -307,9 +307,8 @@ class RealTimeGestureRecognizer:
                             )
                         self._last_emitted_label = emit_label
                         self._last_emit_time = now
-                if emit_label == "NONE":
-                    self._last_emitted_label = None
-                    self._last_emit_time = 0.0
+                # Don't reset _last_emitted_label on NONE - this ensures the same
+                # gesture won't re-emit until a DIFFERENT gesture is detected first
                 if self.on_detection:
                     try:
                         # Report only enabled labels (or NONE) for UI status.
