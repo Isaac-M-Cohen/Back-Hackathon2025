@@ -125,3 +125,6 @@ class CommandController:
 
     def deny(self, confirmation_id: str) -> dict:
         return self.engine.deny(confirmation_id)
+
+    def last_result(self) -> dict | None:
+        return self.engine.get_last_result()

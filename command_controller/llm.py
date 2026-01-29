@@ -81,11 +81,16 @@ class LocalLLMInterpreter:
             '    {"intent":"open_url","url":"https://..."},\n'
             '    {"intent":"wait_for_url","url":"https://...","timeout_secs":15,"interval_secs":0.5},\n'
             '    {"intent":"open_app","app":"App Name"},\n'
+            '    {"intent":"open_file","path":"/path/to/file"},\n'
             '    {"intent":"key_combo","keys":["cmd","l"]},\n'
             '    {"intent":"type_text","text":"hello"},\n'
             '    {"intent":"scroll","direction":"down","amount":3},\n'
             '    {"intent":"mouse_move","x":100,"y":200},\n'
-            '    {"intent":"click","button":"left","clicks":1}\n'
+            '    {"intent":"click","button":"left","clicks":1},\n'
+            '    {"intent":"find_ui","selector":{"app":"App","window_title":"Title","role":"button","name":"OK","contains":true}},\n'
+            '    {"intent":"invoke_ui","selector":{"app":"App","name":"OK"}},\n'
+            '    {"intent":"wait_for_window","window_title":"Title","app":"App","timeout_secs":10},\n'
+            '    {"intent":"web_send_message","contact":"John Doe","message":"Hello!"}\n'
             "  ]\n"
             "}\n"
             "Rules:\n"
@@ -94,6 +99,9 @@ class LocalLLMInterpreter:
             "- If the request is ambiguous, return an empty steps list.\n"
             "- For copy/paste/cut/undo/redo/select all, use key_combo with cmd on macOS or ctrl on Windows.\n"
             "- Use mouse_move and click for multi-step workflows that require precise cursor positioning.\n"
+            "- Prefer find_ui/invoke_ui over pixel-based clicks when possible.\n"
+            "- For sending messages on WhatsApp, use web_send_message with contact (display name) and message. Do NOT use pixel-level clicks or type_text for WhatsApp.\n"
+            "- web_send_message is a high-level intent. Never decompose it into open_url + type_text + click.\n"
             f"Context: {context_json}\n"
             f"Request: {text}"
         )

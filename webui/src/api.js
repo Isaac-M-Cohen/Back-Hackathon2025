@@ -148,6 +148,9 @@ export const Api = {
   async listPendingCommands() {
     return request("/commands/pending");
   },
+  async lastCommand() {
+    return request("/commands/last");
+  },
   async confirmCommand(id) {
     return request("/commands/confirm", {
       method: "POST",

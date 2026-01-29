@@ -4,15 +4,32 @@ from __future__ import annotations
 
 from typing import Any
 
+
+class WebExecutionError(RuntimeError):
+    """Structured error from a web execution step."""
+
+    def __init__(
+        self, code: str, message: str, screenshot_path: str | None = None
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.screenshot_path = screenshot_path
+
+
 ALLOWED_INTENTS = {
     "open_url",
     "wait_for_url",
     "open_app",
+    "open_file",
     "key_combo",
     "type_text",
     "scroll",
     "mouse_move",
     "click",
+    "web_send_message",
+    "find_ui",
+    "invoke_ui",
+    "wait_for_window",
 }
 
 KEY_ALIASES = {
@@ -49,6 +66,9 @@ def validate_step(step: dict) -> dict:
         raise ValueError(f"Unsupported intent '{intent}'")
 
     cleaned: dict[str, Any] = {"intent": intent}
+    target = step.get("target")
+    if isinstance(target, str) and target:
+        cleaned["target"] = target
     if intent == "open_url":
         url = str(step.get("url", "")).strip()
         if not url:
@@ -76,6 +96,13 @@ def validate_step(step: dict) -> dict:
         if not app:
             raise ValueError("open_app requires 'app'")
         cleaned["app"] = app
+        return cleaned
+
+    if intent == "open_file":
+        path = str(step.get("path", "")).strip()
+        if not path:
+            raise ValueError("open_file requires 'path'")
+        cleaned["path"] = path
         return cleaned
 
     if intent == "key_combo":
@@ -145,9 +172,73 @@ def validate_step(step: dict) -> dict:
         cleaned["clicks"] = max(1, clicks_int)
         return cleaned
 
+    if intent == "web_send_message":
+        contact = str(step.get("contact", "")).strip()
+        message = str(step.get("message", "")).strip()
+        if not contact:
+            raise ValueError("web_send_message requires 'contact'")
+        if not message:
+            raise ValueError("web_send_message requires 'message'")
+        cleaned["contact"] = contact
+        cleaned["message"] = message
+        cleaned["target"] = "web"
+        return cleaned
+
+    if intent == "find_ui":
+        selector = step.get("selector")
+        if not isinstance(selector, dict):
+            raise ValueError("find_ui requires 'selector' object")
+        cleaned["selector"] = _clean_selector(selector)
+        return cleaned
+
+    if intent == "invoke_ui":
+        element_id = step.get("element_id")
+        if element_id is not None:
+            cleaned["element_id"] = str(element_id).strip()
+            return cleaned
+        selector = step.get("selector")
+        if not isinstance(selector, dict):
+            raise ValueError("invoke_ui requires 'selector' object or 'element_id'")
+        cleaned["selector"] = _clean_selector(selector)
+        return cleaned
+
+    if intent == "wait_for_window":
+        title = str(step.get("window_title", "")).strip()
+        if not title:
+            raise ValueError("wait_for_window requires 'window_title'")
+        app = str(step.get("app", "")).strip()
+        timeout = step.get("timeout_secs", 10)
+        cleaned["window_title"] = title
+        if app:
+            cleaned["app"] = app
+        try:
+            cleaned["timeout_secs"] = float(timeout)
+        except (TypeError, ValueError):
+            raise ValueError("wait_for_window requires numeric 'timeout_secs'")
+        return cleaned
+
     raise ValueError(f"Unsupported intent '{intent}'")
 
 
 def validate_steps(steps: list[dict]) -> list[dict]:
     """Validate a list of steps and return sanitized copies."""
     return [validate_step(step) for step in steps]
+
+
+def _clean_selector(selector: dict) -> dict:
+    allowed = {"app", "window_title", "role", "name", "contains", "automation_id"}
+    cleaned: dict[str, Any] = {}
+    for key in allowed:
+        if key not in selector:
+            continue
+        value = selector[key]
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        cleaned[key] = value
+    if not cleaned:
+        raise ValueError("selector requires at least one field")
+    return cleaned

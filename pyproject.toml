@@ -2,7 +2,7 @@
 name = "back-hackathon2025"
 version = "0.1.0"
 description = "Hand + voice control system prototype"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11"
 dependencies = [
   "mediapipe>=0.10,<0.11",
   "opencv-python>=4.8,<5",
@@ -16,11 +16,14 @@ dependencies = [
   "scikit-learn>=1.3,<2",
   "fastapi>=0.111,<1",
   "uvicorn>=0.30,<0.31",
+  "playwright>=1.40,<2",
 ]
 
 [tool.setuptools]
 packages = [
   "command_controller",
+  "command_controller.executors",
+  "command_controller.web_adapters",
   "gesture_module",
   "voice_module",
   "video_module",

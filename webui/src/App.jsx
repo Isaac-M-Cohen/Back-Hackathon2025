@@ -33,6 +33,7 @@ export default function GestureControlApp() {
   const [lastDetection, setLastDetection] = useState(null);
   const [pollIntervalMs, setPollIntervalMs] = useState(1000);
   const [pendingCommands, setPendingCommands] = useState([]);
+  const [lastCommand, setLastCommand] = useState(null);
   const [isBooting, setIsBooting] = useState(true);
   const [bootMessage, setBootMessage] = useState("Starting...");
   const bootStartedRef = useRef(false);
@@ -176,12 +177,29 @@ export default function GestureControlApp() {
       try {
         const res = await Api.listPendingCommands();
         setPendingCommands(res.items || []);
+        const last = await Api.lastCommand();
+        if (last && Object.keys(last).length > 0) {
+          setLastCommand(last);
+        }
       } catch (err) {
         console.error(err);
       }
     }, 1200);
     return () => clearInterval(id);
   }, []);
+
+  const lastCommandMeta = (() => {
+    if (!lastCommand) {
+      return null;
+    }
+    const status = lastCommand.status || "unknown";
+    const results = Array.isArray(lastCommand.results) ? lastCommand.results : [];
+    const stepCount = results.length;
+    const timestamp = lastCommand.timestamp
+      ? new Date(lastCommand.timestamp * 1000)
+      : null;
+    return { status, stepCount, timestamp, reason: lastCommand.reason || "" };
+  })();
 
   async function refreshGestures() {
     try {
@@ -440,6 +458,21 @@ export default function GestureControlApp() {
               {lastDetection.confidence !== undefined &&
                 `(conf ${lastDetection.confidence.toFixed(2)})`}
             </span>
+          </div>
+        )}
+
+        {lastCommandMeta && (
+          <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 px-4 py-2 text-sm flex items-center justify-between">
+            <span>
+              Last command: <strong>{lastCommandMeta.status}</strong>{" "}
+              {lastCommandMeta.stepCount > 0 && `(${lastCommandMeta.stepCount} steps)`}
+              {lastCommandMeta.reason && ` — ${lastCommandMeta.reason}`}
+            </span>
+            {lastCommandMeta.timestamp && (
+              <span className="text-xs text-blue-700">
+                {lastCommandMeta.timestamp.toLocaleTimeString()}
+              </span>
+            )}
           </div>
         )}
 
@@ -734,10 +767,10 @@ function SettingsModal({
   const outputDevices = audioDevices?.outputs || [];
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-6 z-50">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Settings</h2>
+      <div className="bg-surface-elevated rounded-2xl shadow-lg border border-line w-full max-w-md p-6">
+        <h2 className="text-lg font-medium text-content-primary mb-4">Settings</h2>
         <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4">
-          <div className="flex items-center justify-between text-sm text-gray-700">
+          <div className="flex items-center justify-between text-sm text-content-secondary">
             <span>Dark mode</span>
             <button
               type="button"
@@ -747,18 +780,18 @@ function SettingsModal({
                 onChange({ ...values, theme: isDark ? "light" : "dark" })
               }
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isDark ? "bg-gray-800" : "bg-gray-300"
+                isDark ? "bg-toggle-on" : "bg-toggle-off"
               }`}
             >
               <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-5 w-5 transform rounded-full bg-toggle-knob transition-transform ${
                   isDark ? "translate-x-5" : "translate-x-1"
                 }`}
               />
             </button>
           </div>
-          <div className="rounded-xl border border-gray-300 bg-gray-100 p-3 space-y-4">
-            <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+          <div className="rounded-xl border border-line bg-surface-inset p-3 space-y-4">
+            <p className="text-xs font-medium text-content-tertiary uppercase tracking-wide">
               Audio I/O
             </p>
             <div className="space-y-3">
@@ -786,8 +819,8 @@ function SettingsModal({
               />
             </div>
           </div>
-          <div className="rounded-xl border border-gray-300 bg-gray-100 p-3 space-y-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="rounded-xl border border-line bg-surface-inset p-3 space-y-4">
+            <p className="text-xs font-medium text-content-tertiary uppercase tracking-wide">
               Value Settings
             </p>
             <ValueSettingsPresets values={values} onChange={onChange} />
@@ -796,19 +829,19 @@ function SettingsModal({
         <div className="mt-6 flex items-center justify-end gap-3">
             <button
               onClick={() => onChange({ ...defaultValues })}
-              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg bg-btn-tertiary text-btn-tertiary-text hover:bg-btn-tertiary-hover transition-colors"
             >
               Reset to defaults
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg bg-btn-secondary text-btn-secondary-text hover:bg-btn-secondary-hover transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onSave}
-              className="px-4 py-2 text-sm rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg bg-accent text-content-onaccent hover:bg-accent-hover transition-colors"
             >
               Save
             </button>
