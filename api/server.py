@@ -55,6 +55,13 @@ def _shutdown_cleanup() -> None:
         workflow.stop_recognition()
     except Exception as exc:
         tprint(f"[API] Shutdown cleanup failed: {exc}")
+    try:
+        web_exec = getattr(controller.engine.executor, "_web_executor", None)
+        if web_exec is not None:
+            web_exec.shutdown()
+            tprint("[API] WebExecutor shutdown complete")
+    except Exception as exc:
+        tprint(f"[API] WebExecutor cleanup failed: {exc}")
 
 
 class StaticGestureRequest(BaseModel):
@@ -248,7 +255,6 @@ def set_gesture_command(req: SetGestureCommandRequest):
         controller.dataset.set_command_steps(req.label, None)
     return {"status": "ok"}
 
-
 @app.post("/train")
 def train():
     raise HTTPException(
@@ -398,6 +404,11 @@ def health():
 @app.get("/commands/pending")
 def list_pending_commands():
     return {"items": controller.list_pending()}
+
+
+@app.get("/commands/last")
+def last_command():
+    return controller.last_result() or {}
 
 
 class CommandConfirmationRequest(BaseModel):

@@ -20,6 +20,8 @@ SENSITIVE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+ALWAYS_CONFIRM_INTENTS = {"web_send_message"}
+
 
 class CommandEngine:
     def __init__(
@@ -34,10 +36,13 @@ class CommandEngine:
         self.executor = executor or Executor()
         self.confirmations = confirmations or ConfirmationStore()
         self.logger = logger or CommandLogger()
+        self._last_result: dict | None = None
 
     def run(self, *, source: str, text: str, context: dict | None = None) -> dict:
         if not text.strip():
-            return {"status": "ignored", "reason": "empty"}
+            result = {"status": "ignored", "reason": "empty"}
+            self._store_result(result)
+            return result
 
         try:
             start = time.monotonic()
@@ -48,10 +53,14 @@ class CommandEngine:
             deep_log(f"[DEEP][ENGINE] parsed payload={payload} steps={steps}")
         except (ValueError, LocalLLMError) as exc:
             self.logger.error(f"Command parse failed: {exc}")
-            return {"status": "error", "reason": str(exc)}
+            result = {"status": "error", "reason": str(exc)}
+            self._store_result(result)
+            return result
 
         if not steps:
-            return {"status": "ignored", "reason": "no_steps"}
+            result = {"status": "ignored", "reason": "no_steps"}
+            self._store_result(result)
+            return result
 
         if self._requires_confirmation(text, steps):
             pending = self.confirmations.create(
@@ -61,20 +70,25 @@ class CommandEngine:
                 intents=steps,
             )
             self.logger.info(f"Command pending confirmation: {pending.id}")
-            return {"status": "pending", "id": pending.id}
+            result = {"status": "pending", "id": pending.id}
+            self._store_result(result)
+            return result
 
-        self.executor.execute_steps(steps)
-        return {"status": "ok"}
+        return self._safe_execute(steps)
 
     def run_steps(self, *, source: str, text: str, steps: list[dict]) -> dict:
         if not steps:
-            return {"status": "ignored", "reason": "no_steps"}
+            result = {"status": "ignored", "reason": "no_steps"}
+            self._store_result(result)
+            return result
 
         try:
             cleaned_steps = validate_steps(steps)
         except ValueError as exc:
             self.logger.error(f"Command steps invalid: {exc}")
-            return {"status": "error", "reason": str(exc)}
+            result = {"status": "error", "reason": str(exc)}
+            self._store_result(result)
+            return result
         deep_log(f"[DEEP][ENGINE] run_steps cleaned_steps={cleaned_steps}")
 
         if self._requires_confirmation(text, cleaned_steps):
@@ -85,26 +99,57 @@ class CommandEngine:
                 intents=cleaned_steps,
             )
             self.logger.info(f"Command pending confirmation: {pending.id}")
-            return {"status": "pending", "id": pending.id}
+            result = {"status": "pending", "id": pending.id}
+            self._store_result(result)
+            return result
 
-        self.executor.execute_steps(cleaned_steps)
-        return {"status": "ok"}
+        return self._safe_execute(cleaned_steps)
 
     def approve(self, confirmation_id: str) -> dict:
         pending = self.confirmations.pop(confirmation_id)
         if not pending:
-            return {"status": "missing"}
-        self.executor.execute_steps(pending.intents)
-        return {"status": "ok"}
+            result = {"status": "missing"}
+            self._store_result(result)
+            return result
+        return self._safe_execute(pending.intents)
 
     def deny(self, confirmation_id: str) -> dict:
         pending = self.confirmations.pop(confirmation_id)
         if not pending:
-            return {"status": "missing"}
-        return {"status": "denied"}
+            result = {"status": "missing"}
+            self._store_result(result)
+            return result
+        result = {"status": "denied"}
+        self._store_result(result)
+        return result
+
+    def _safe_execute(self, steps: list[dict]) -> dict:
+        """Execute steps, catching web execution errors."""
+        try:
+            results = self.executor.execute_steps(steps)
+            result = {"status": "ok", "results": results}
+            self._store_result(result)
+            return result
+        except Exception as exc:
+            self.logger.error(f"Execution failed: {exc}")
+            error_info: dict = {"status": "error", "reason": str(exc)}
+            if hasattr(exc, "code"):
+                error_info["code"] = exc.code
+            if hasattr(exc, "screenshot_path") and exc.screenshot_path:
+                error_info["screenshot"] = exc.screenshot_path
+            self._store_result(error_info)
+            return error_info
 
     def list_pending(self) -> list[dict]:
         return [item.to_dict() for item in self.confirmations.list()]
+
+    def get_last_result(self) -> dict | None:
+        return self._last_result
+
+    def _store_result(self, result: dict) -> None:
+        payload = dict(result)
+        payload["timestamp"] = time.time()
+        self._last_result = payload
 
     def _parse_text(self, text: str, context: dict) -> dict | list:
         stripped = text.strip()
@@ -178,6 +223,9 @@ class CommandEngine:
         if SENSITIVE_PATTERNS.search(text):
             return True
         for step in steps:
-            if step.get("intent") == "type_text" and SENSITIVE_PATTERNS.search(step.get("text", "")):
+            intent = step.get("intent", "")
+            if intent in ALWAYS_CONFIRM_INTENTS:
+                return True
+            if intent == "type_text" and SENSITIVE_PATTERNS.search(step.get("text", "")):
                 return True
         return False
