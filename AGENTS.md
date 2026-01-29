@@ -17,7 +17,6 @@ be the single source of context when resetting a session.
 - `video_module/gesture_ml.py`: dataset + sample collection for TFLite keypoint/point-history classifiers.
 - `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), whisper backends.
 - `api/server.py`: FastAPI endpoints used by the React UI.
-- `ui/`: legacy PySide6 desktop UI (no longer used).
 - `webui/`: React + Vite UI (`webui/src/App.jsx`, `webui/src/api.js`).
 - `config/`: JSON configs for gestures, voice, app settings, and command mapping.
 - `user_data/<user_id>/`: persisted datasets, labels, hotkeys, and trained model.
@@ -135,10 +134,7 @@ be the single source of context when resetting a session.
 - Branches referenced: `command-gestures`/`command_gestures`, `Hand-mouse-implementation`. Prior PR conflicts in `AGENTS.md`, `command_controller/controller.py`, `command_controller/engine.py`, `command_controller/executor.py`, `command_controller/llm.py`, `video_module/gesture_ml.py`, `webui/src/App.jsx`, `webui/src/api.js`.
 
 ## Recent UI changes
-- `ui/main_window.py` replaced with an "Enhanced" UI that matches the web UI styling.
-- New elements: custom `GestureRow` widget, scroll area list, banners, larger spacing, updated styles.
-- Uses `APP_NAME` from `config/app_settings.json`, falling back to "Gesture Control".
-- Window icon path uses `ui/assets/icons/<app_name>.png` (lowercase, spaces -> underscores).
+- `webui/src/App.jsx` aligned with desktop workflows (settings, gestures, recognition control).
 
 ## Dependency setup notes
 - Install project deps via `pip install -e .` (pyproject.toml).
