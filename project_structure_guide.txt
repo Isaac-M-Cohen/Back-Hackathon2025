@@ -39,7 +39,6 @@ Back-Hackathon2025/
 ├── user_data/                       (per-user datasets + models)
 ├── utils/                           (shared helpers)
 ├── scripts/                         (build + tooling)
-├── ui/                              (legacy PySide UI)
 └── hand-gesture-recognition-mediapipe/ (reference repo)
 
 ------------------------------------------------------------
