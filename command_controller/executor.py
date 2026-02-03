@@ -9,6 +9,10 @@ from command_controller.intents import WebExecutionError
 from utils.log_utils import tprint
 
 
+# Intents that can be promoted to web target when following an open_url(target="web").
+_WEB_CHAINABLE = {"type_text", "key_combo", "click", "scroll"}
+
+
 class Executor:
     def __init__(self) -> None:
         self._web_executor = None  # lazy: WebExecutor
@@ -18,6 +22,7 @@ class Executor:
         tprint(f"[EXECUTOR] Performing action='{action}' payload={payload}")
 
     def execute_steps(self, steps: list[dict]) -> list[dict]:
+        steps = self._infer_web_targets(steps)
         results: list[dict] = []
         for step in steps:
             intent = str(step.get("intent", "")).strip()
@@ -29,6 +34,38 @@ class Executor:
             results.append(result.to_dict())
         return results
 
+    @staticmethod
+    def _infer_web_targets(steps: list[dict]) -> list[dict]:
+        """Promote chainable intents to target='web' after an open_url with target='web'.
+
+        Also drops wait_for_url steps inside web chains since Playwright handles
+        page-load waiting natively.
+        """
+        in_web_chain = False
+        out: list[dict] = []
+        for step in steps:
+            intent = step.get("intent", "")
+            target = step.get("target")
+
+            if intent == "open_url" and target == "web":
+                in_web_chain = True
+                out.append(step)
+                continue
+
+            if in_web_chain:
+                if intent == "wait_for_url":
+                    # Playwright handles waiting; skip this step.
+                    continue
+                if intent in _WEB_CHAINABLE:
+                    step = {**step, "target": "web"}
+                    out.append(step)
+                    continue
+                # Non-chainable intent breaks the web chain.
+                in_web_chain = False
+
+            out.append(step)
+        return out
+
     def _get_web_executor(self):
         if self._web_executor is None:
             from command_controller.web_executor import WebExecutor
@@ -38,7 +75,26 @@ class Executor:
     def _execute_web_step(self, step: dict) -> ExecutionResult:
         intent = str(step.get("intent", "")).strip() or "web"
         try:
-            self._get_web_executor().execute_step(step)
+            web_exec = self._get_web_executor()
+            web_exec.execute_step(step)
+
+            # Check for resolution metadata using protocol method
+            res_data = web_exec.get_last_resolution()
+            if res_data:
+                return ExecutionResult(
+                    intent=intent,
+                    status="ok",
+                    target="web",
+                    resolved_url=res_data.final_url,
+                    fallback_used=res_data.fallback_used,
+                    navigation_time_ms=res_data.elapsed_ms,
+                    dom_search_query=(
+                        res_data.resolution_details.search_query
+                        if res_data.resolution_details
+                        else None
+                    ),
+                )
+
             return ExecutionResult(intent=intent, status="ok", target="web")
         except WebExecutionError as exc:
             return ExecutionResult(

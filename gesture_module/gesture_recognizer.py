@@ -50,7 +50,7 @@ def calc_hand_facing_direction(hand_landmarks, handedness) -> str:
     axis = int(np.argmax(np.abs(normal)))
 
     if axis == 2:
-        return "Camera" if normal[2] < 0 else "Away"
+        return "Away" if normal[2] < 0 else "Camera"
     if axis == 0:
         return "Right" if normal[0] > 0 else "Left"
     return "Down" if normal[1] > 0 else "Up"

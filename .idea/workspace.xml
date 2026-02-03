@@ -5,14 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9177b963-cf03-4569-ab04-4a6d4093da51" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SESSION.md" beforeDir="false" afterPath="$PROJECT_DIR$/SESSION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/command_controller/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/executor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/command_controller/llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/llm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/app_settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/config/app_settings.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gesture_module/workflow.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/workflow.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,7 +64,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;video-module&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;voice-gesture-executor&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/isaaccohen/Desktop/IntelliJ/Back-Hackathon2025&quot;,
@@ -168,8 +162,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.27397.103" />
-        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-IU-252.27397.103" />
+        <option value="bundled-js-predefined-d6986cc7102b-a71380e98a7c-JavaScript-PY-252.28238.29" />
+        <option value="bundled-python-sdk-a101402ee41c-968fe969f28a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.28238.29" />
       </set>
     </attachedChunks>
   </component>
@@ -199,6 +193,7 @@
       <workItem from="1766532232850" duration="15058000" />
       <workItem from="1766580378645" duration="70161000" />
       <workItem from="1768158352591" duration="2000" />
+      <workItem from="1769582855664" duration="4000" />
     </task>
     <servers />
   </component>
@@ -217,7 +212,7 @@
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$main.coverage" NAME="main Coverage Results" MODIFIED="1766444848482" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/HackathonProject2025$logger.coverage" NAME="logger Coverage Results" MODIFIED="1764910436513" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$controller.coverage" NAME="controller Coverage Results" MODIFIED="1765140750267" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
-    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="NativeWindow Coverage Results" MODIFIED="1767469238599" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="NativeWindow Coverage Results" MODIFIED="1769432354481" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$stt_engine.coverage" NAME="stt_engine Coverage Results" MODIFIED="1765198274346" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/voice_module" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$Backend.coverage" NAME="Backend Coverage Results" MODIFIED="1766531719087" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>

@@ -48,6 +48,9 @@ class MacOSExecutor(BaseExecutor):
                 self._type_text(text)
                 return self._ok(intent, target, start)
 
+            if intent == "wait_for_url":
+                return self._unsupported(intent, target, "wait_for_url removed; use target:web", start)
+
             if intent == "find_ui":
                 return self._unsupported(intent, target, "find_ui not implemented", start)
 
@@ -179,4 +182,3 @@ class MacOSExecutor(BaseExecutor):
             details={"reason": reason},
             elapsed_ms=elapsed_ms,
         )
-
