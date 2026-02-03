@@ -28,7 +28,6 @@ be the single source of context when resetting a session.
   - `python-dotenv` for `env/.env`.
   - `pyaudio` for microphone capture.
   - `faster-whisper` for local Whisper STT.
-  - `websockets` >= 12 for OpenAI Realtime STT.
 - Node 18+ for the web UI (`webui`).
 
 ## Run
@@ -41,10 +40,7 @@ be the single source of context when resetting a session.
   - `cd webui && npm install && npm run dev`
 
 ## Environment variables
-- `OPENAI_API_KEY` required for OpenAI Realtime STT.
-- `STT_PROVIDER` can be `openai-realtime`, `whisperlive`, or `whisper-local`.
-- `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_URL`, `OPENAI_TRANSCRIPTION_MODEL`, `OPENAI_TRANSCRIPTION_LANGUAGE` for Realtime STT config.
-- `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`, `WHISPERLIVE_LANGUAGE`, `WHISPERLIVE_CHUNK_MS` for WhisperLive.
+- `STT_PROVIDER` can be `whisper-local`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`, `LOCAL_WHISPER_COMPUTE_TYPE`, `LOCAL_WHISPER_LANGUAGE` for local Whisper.
 - `GESTURE_USER_ID` to select a user profile.
 - `ENABLE_VOICE=0` to disable voice in the backend (API/sidecar).

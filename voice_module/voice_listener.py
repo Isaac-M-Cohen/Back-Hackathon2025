@@ -57,7 +57,7 @@ class VoiceListener:
                 # Mark thread as finished so is_running reflects completion.
                 self._thread = None
 
-        tprint("[VOICE] Listener starting (mic -> realtime STT)...")
+        tprint("[VOICE] Listener starting (mic -> local STT)...")
         self._thread = threading.Thread(
             target=_runner, name="VoiceListenerMic", daemon=False
         )
@@ -76,7 +76,7 @@ class VoiceListener:
         return bool(self._thread and self._thread.is_alive())
 
     async def handle_audio_stream(self, audio_stream: AsyncIterable[bytes | str]) -> None:
-        """Consume an audio stream and forward realtime transcripts."""
+        """Consume an audio stream and forward transcripts."""
         transcription = await self.stt.transcribe_stream(audio_stream)
         tprint(f"[VOICE] Transcript: {transcription}")
         if self.log_token_usage:
