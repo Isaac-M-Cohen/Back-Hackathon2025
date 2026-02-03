@@ -24,7 +24,6 @@ Back-Hackathon2025/
 ├── voice_module/                    (voice capture + STT)
 │   ├── voice_listener.py
 │   ├── stt_engine.py
-│   ├── stt_whisperlive.py
 │   ├── stt_whisper_local.py
 │   └── voice_utils.py
 ├── webui/                           (React + Vite UI in Tauri)
@@ -65,8 +64,6 @@ voice_module/voice_listener.py
 
 voice_module/stt_engine.py
 - Provider switch based on STT_PROVIDER env:
-  - "openai-realtime" (websockets streaming)
-  - "whisperlive"
   - "whisper-local"
 - Expected public method:
   async transcribe_stream(audio_stream) -> str transcript
@@ -110,11 +107,8 @@ SETTINGS + ENVIRONMENT (voice-related)
 ------------------------------------------------------------
 
 Environment variables (STT providers):
-- STT_PROVIDER = openai-realtime | whisperlive | whisper-local
-- OPENAI_API_KEY (required for openai-realtime)
-- OPENAI_REALTIME_MODEL, OPENAI_REALTIME_URL
-- OPENAI_TRANSCRIPTION_MODEL, OPENAI_TRANSCRIPTION_LANGUAGE
-- WHISPERLIVE_URL, WHISPERLIVE_MODEL, WHISPERLIVE_LANGUAGE, WHISPERLIVE_CHUNK_MS
+- STT_PROVIDER = whisper-local
+- LOCAL_WHISPER_MODEL_PATH, LOCAL_WHISPER_DEVICE, LOCAL_WHISPER_COMPUTE_TYPE, LOCAL_WHISPER_LANGUAGE
 - LOCAL_WHISPER_MODEL_PATH, LOCAL_WHISPER_DEVICE, LOCAL_WHISPER_COMPUTE_TYPE
 
 Runtime settings:
@@ -142,8 +136,8 @@ Basic local test:
 - Confirm controller receives transcript and prints command logs.
 
 If using OpenAI Realtime:
-- Ensure OPENAI_API_KEY is set.
-- websockets >= 12 is required.
+- Ensure local Whisper model is available or configured.
+- Whisper runs locally via faster-whisper.
 
 ------------------------------------------------------------
 SUMMARY
