@@ -40,10 +40,34 @@ export async function waitForApiReady({ timeoutMs = 8000, intervalMs = 200 } = {
 }
 
 async function request(path, options = {}) {
-  const res = await fetch(`${apiBase}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const timeoutMs = options.timeoutMs;
+  let timeoutId;
+  const controller = timeoutMs ? new AbortController() : null;
+  const headers = { ...(options.headers || {}) };
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const fetchOptions = {
     ...options,
-  });
+    headers,
+  };
+  if (controller) {
+    fetchOptions.signal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  }
+  let res;
+  try {
+    res = await fetch(`${apiBase}${path}`, fetchOptions);
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
+    throw err;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || res.statusText);
@@ -118,10 +142,14 @@ export const Api = {
     return request("/gestures/command", {
       method: "POST",
       body: JSON.stringify({ label, command }),
+      timeoutMs: 20000,
     });
   },
   async listPendingCommands() {
     return request("/commands/pending");
+  },
+  async lastCommand() {
+    return request("/commands/last");
   },
   async confirmCommand(id) {
     return request("/commands/confirm", {

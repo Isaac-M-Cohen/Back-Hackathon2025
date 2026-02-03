@@ -10,6 +10,7 @@ from urllib import request as urlrequest
 from urllib.error import URLError
 from typing import Optional, Any
 import csv
+import concurrent.futures
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -18,8 +19,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from command_controller.controller import CommandController
+from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
+from utils.log_utils import tprint
+from utils.settings_store import refresh_settings, is_deep_logging, get_settings
 from utils.runtime_state import get_client_os, set_client_os
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
@@ -43,6 +47,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("shutdown")
+def _shutdown_cleanup() -> None:
+    try:
+        workflow.stop_recognition()
+    except Exception as exc:
+        tprint(f"[API] Shutdown cleanup failed: {exc}")
+    try:
+        web_exec = getattr(controller.engine.executor, "_web_executor", None)
+        if web_exec is not None:
+            web_exec.shutdown()
+            tprint("[API] WebExecutor shutdown complete")
+    except Exception as exc:
+        tprint(f"[API] WebExecutor cleanup failed: {exc}")
 
 
 class StaticGestureRequest(BaseModel):
@@ -118,6 +137,10 @@ def update_settings(payload: dict[str, Any]):
         "recognition_confidence_threshold",
         "enable_commands",
         "recognition_max_fps",
+        "recognition_watchdog_timeout_ms",
+        "command_timeout_ms",
+        "command_hotkey_interval_secs",
+        "log_command_debug",
         "microphone_device_index",
         "speaker_device_index",
     }
@@ -128,6 +151,8 @@ def update_settings(payload: dict[str, Any]):
     from utils.file_utils import save_json
 
     save_json("config/app_settings.json", settings)
+    refresh_settings()
+    workflow.apply_runtime_settings(settings)
     return {"status": "ok", "settings": settings}
 
 
@@ -200,8 +225,35 @@ def set_gesture_command(req: SetGestureCommandRequest):
     workflow.ensure_presets_loaded()
     workflow.dataset.set_command(req.label, req.command)
     controller.dataset.set_command(req.label, req.command)
+    if is_deep_logging():
+        tprint(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
+    if req.command.strip():
+        try:
+            settings = get_settings()
+            timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    controller.engine.interpreter.interpret,
+                    req.command,
+                    {},
+                    ALLOWED_INTENTS,
+                )
+                payload = future.result(timeout=timeout_secs)
+            steps = validate_steps(normalize_steps(payload))
+            if not steps:
+                raise ValueError("No executable steps returned")
+        except concurrent.futures.TimeoutError:
+            raise HTTPException(status_code=504, detail="Command parsing timed out")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
+        if is_deep_logging():
+            tprint(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
+        workflow.dataset.set_command_steps(req.label, steps)
+        controller.dataset.set_command_steps(req.label, steps)
+    else:
+        workflow.dataset.set_command_steps(req.label, None)
+        controller.dataset.set_command_steps(req.label, None)
     return {"status": "ok"}
-
 
 @app.post("/train")
 def train():
@@ -228,6 +280,10 @@ def start_recognition(req: StartRecognitionRequest):
         max_fps = float(max_fps_value) if max_fps_value is not None else 0.0
         if max_fps < 0:
             max_fps = 0.0
+        watchdog_ms = settings.get("recognition_watchdog_timeout_ms", 0)
+        watchdog_secs = float(watchdog_ms) / 1000.0 if watchdog_ms else 0.0
+        if watchdog_secs < 0:
+            watchdog_secs = 0.0
         confidence_threshold = (
             req.confidence_threshold
             if req.confidence_threshold is not None
@@ -242,10 +298,11 @@ def start_recognition(req: StartRecognitionRequest):
             show_window=req.show_window,
             emit_actions=emit_actions,
             max_fps=max_fps,
+            watchdog_timeout_secs=watchdog_secs,
         )
     except RuntimeError as exc:
         # Surface missing model / setup errors as 400 for the UI.
-        print(f"[API] Start recognition failed: {exc}")
+        tprint(f"[API] Start recognition failed: {exc}")
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
@@ -256,7 +313,7 @@ def stop_recognition():
         workflow.stop_recognition()
     except Exception as exc:
         # Prevent a crash from propagating to the UI; log and return ok.
-        print(f"[API] Failed to stop recognition: {exc}")
+        tprint(f"[API] Failed to stop recognition: {exc}")
     return {"status": "ok"}
 
 
@@ -327,7 +384,7 @@ def _try_start_ollama() -> bool:
 @app.get("/health")
 def health():
     global _OLLAMA_CHECKED
-    print("[HEALTH] /health check requested")
+    tprint("[HEALTH] /health check requested")
     ready, err = _ollama_ready()
     if not ready and not _OLLAMA_CHECKED:
         _OLLAMA_CHECKED = True
@@ -347,6 +404,11 @@ def health():
 @app.get("/commands/pending")
 def list_pending_commands():
     return {"items": controller.list_pending()}
+
+
+@app.get("/commands/last")
+def last_command():
+    return controller.last_result() or {}
 
 
 class CommandConfirmationRequest(BaseModel):

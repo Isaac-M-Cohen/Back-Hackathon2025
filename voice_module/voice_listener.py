@@ -6,6 +6,7 @@ import time
 from typing import AsyncIterable
 
 from command_controller.controller import CommandController
+from utils.log_utils import tprint
 from utils.file_utils import load_json
 from voice_module.stt_engine import SpeechToTextEngine
 
@@ -32,7 +33,7 @@ class VoiceListener:
     def start(self) -> None:
         """Begin microphone capture in a background thread and stream to STT in batches."""
         if self._thread and self._thread.is_alive():
-            print("[VOICE] Listener already running")
+            tprint("[VOICE] Listener already running")
             return
         self._stop_event.clear()
         self._single_batch_done = False
@@ -49,14 +50,14 @@ class VoiceListener:
                 else:
                     asyncio.run(self._continuous_loop())
             except Exception as exc:  # pragma: no cover - surface runtime issues
-                print(f"[VOICE] Listener error: {exc}")
+                tprint(f"[VOICE] Listener error: {exc}")
             finally:
                 self._single_batch_done = True
                 self._stop_event.set()
                 # Mark thread as finished so is_running reflects completion.
                 self._thread = None
 
-        print("[VOICE] Listener starting (mic -> realtime STT)...")
+        tprint("[VOICE] Listener starting (mic -> local STT)...")
         self._thread = threading.Thread(
             target=_runner, name="VoiceListenerMic", daemon=False
         )
@@ -75,13 +76,13 @@ class VoiceListener:
         return bool(self._thread and self._thread.is_alive())
 
     async def handle_audio_stream(self, audio_stream: AsyncIterable[bytes | str]) -> None:
-        """Consume an audio stream and forward realtime transcripts."""
+        """Consume an audio stream and forward transcripts."""
         transcription = await self.stt.transcribe_stream(audio_stream)
-        print(f"[VOICE] Transcript: {transcription}")
+        tprint(f"[VOICE] Transcript: {transcription}")
         if self.log_token_usage:
             usage = self.stt.format_usage()
             if usage:
-                print(f"[VOICE] Token usage: {usage}")
+                tprint(f"[VOICE] Token usage: {usage}")
         self.controller.handle_event(source="voice", action=transcription)
 
     async def microphone_stream(
@@ -135,11 +136,11 @@ class VoiceListener:
         """Helper to stream mic audio to STT and dispatch the transcript."""
         audio_stream = self.microphone_stream(seconds=seconds, chunk_size=chunk_size)
         transcription = await self.stt.transcribe_stream(audio_stream)
-        print(f"[VOICE] Transcript: {transcription}")
+        tprint(f"[VOICE] Transcript: {transcription}")
         if self.log_token_usage:
             usage = self.stt.format_usage()
             if usage:
-                print(f"[VOICE] Token usage: {usage}")
+                tprint(f"[VOICE] Token usage: {usage}")
         self.controller.handle_event(source="voice", action=transcription)
 
     async def _continuous_loop(self) -> None:

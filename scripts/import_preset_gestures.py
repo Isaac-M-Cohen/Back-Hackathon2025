@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from video_module.gesture_ml import GestureDataset
+from utils.log_utils import tprint
 
 
 def main() -> None:
@@ -34,7 +35,7 @@ def main() -> None:
     dataset.keypoint_dir.mkdir(parents=True, exist_ok=True)
     dataset.keypoint_csv.write_text(args.keypoint_csv.read_text())
     dataset.keypoint_labels_path.write_text(args.label_csv.read_text())
-    print(f"Copied presets into {dataset.keypoint_dir}")
+    tprint(f"Copied presets into {dataset.keypoint_dir}")
 
 
 if __name__ == "__main__":

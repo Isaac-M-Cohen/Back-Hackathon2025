@@ -17,7 +17,6 @@ be the single source of context when resetting a session.
 - `video_module/gesture_ml.py`: dataset + sample collection for TFLite keypoint/point-history classifiers.
 - `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), whisper backends.
 - `api/server.py`: FastAPI endpoints used by the React UI.
-- `ui/`: legacy PySide6 desktop UI (no longer used).
 - `webui/`: React + Vite UI (`webui/src/App.jsx`, `webui/src/api.js`).
 - `config/`: JSON configs for gestures, voice, app settings, and command mapping.
 - `user_data/<user_id>/`: persisted datasets, labels, hotkeys, and trained model.
@@ -29,7 +28,6 @@ be the single source of context when resetting a session.
   - `python-dotenv` for `env/.env`.
   - `pyaudio` for microphone capture.
   - `faster-whisper` for local Whisper STT.
-  - `websockets` >= 12 for OpenAI Realtime STT.
 - Node 18+ for the web UI (`webui`).
 
 ## Run
@@ -42,10 +40,7 @@ be the single source of context when resetting a session.
   - `cd webui && npm install && npm run dev`
 
 ## Environment variables
-- `OPENAI_API_KEY` required for OpenAI Realtime STT.
-- `STT_PROVIDER` can be `openai-realtime`, `whisperlive`, or `whisper-local`.
-- `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_URL`, `OPENAI_TRANSCRIPTION_MODEL`, `OPENAI_TRANSCRIPTION_LANGUAGE` for Realtime STT config.
-- `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`, `WHISPERLIVE_LANGUAGE`, `WHISPERLIVE_CHUNK_MS` for WhisperLive.
+- `STT_PROVIDER` can be `whisper-local`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`, `LOCAL_WHISPER_COMPUTE_TYPE`, `LOCAL_WHISPER_LANGUAGE` for local Whisper.
 - `GESTURE_USER_ID` to select a user profile.
 - `ENABLE_VOICE=0` to disable voice in the backend (API/sidecar).
@@ -109,19 +104,33 @@ be the single source of context when resetting a session.
 - Avoid changing unrelated files or generated artifacts.
 - If you touch training, keep input dimensions aligned with 42 (keypoint) and 32 (point history).
 - UI collects gesture samples, then calls training; API endpoints mirror these flows.
+- MediaPipe + TFLite pipeline is in `gesture_module/` + `video_module/`, replacing the scikit pipeline.
+- Other project reference is cloned at repo root: `hand-gesture-recognition-mediapipe`.
 
 ## Testing
 - No formal test suite in repo. For manual checks, run the desktop app or API + web UI.
+
+## Runtime notes (recent)
+- Per-user artifacts live in `user_data/<user_id>/keypoint_classifier` and `user_data/<user_id>/point_history_classifier`, with presets copied from `data/presets`.
+- Default FPS cap is 10.
+- Command execution uses PyAutoGUI; failsafe can trigger if mouse hits screen corners.
+- UI polls `/commands/pending` for pending confirmations.
 
 ## Current working context (session-specific)
 - OS/IDE: macOS (Apple Silicon), using PyCharm; run configs live in `.idea/workspace.xml`.
 - Ensure PyCharm points to the active Python 3.11 interpreter you want to use.
 
+## Session Addendum (Gesture Pipeline + Runtime Notes)
+- Migrated from scikit MLP to MediaPipe + TFLite classifiers (static keypoint + point history). New modules: `video_module/tflite_pipeline.py`, `video_module/tflite_classifiers.py`.
+- Presets/models expected under `data/presets`; defaults copied into `user_data/<user_id>` on startup (prior FileNotFound fix).
+- Added settings: `recognition_fps_cap` default 10; per-command timeout + watchdog configs.
+- TensorFlow kept for notebooks; runtime uses TFLite. MediaPipe >= 0.10 required. Prior TF/protobuf import error fixed; warnings remain.
+- `/commands/pending` polling is for pending command confirmations.
+- Runtime issues to remember: slow first recognition start; duplicate triggers; "NONE|" freeze after commands; PyAutoGUI fail-safe error; LLM latency spikes; copy/paste shortcuts bypass LLM; macOS beeps on command execution; settings changes while camera running not applied immediately; detection too broad (detects all gestures vs enabled ones); commands sometimes not executing; question if Ollama/execution disabled; user asked to flip a boolean to true (no commit).
+- Branches referenced: `command-gestures`/`command_gestures`, `Hand-mouse-implementation`. Prior PR conflicts in `AGENTS.md`, `command_controller/controller.py`, `command_controller/engine.py`, `command_controller/executor.py`, `command_controller/llm.py`, `video_module/gesture_ml.py`, `webui/src/App.jsx`, `webui/src/api.js`.
+
 ## Recent UI changes
-- `ui/main_window.py` replaced with an "Enhanced" UI that matches the web UI styling.
-- New elements: custom `GestureRow` widget, scroll area list, banners, larger spacing, updated styles.
-- Uses `APP_NAME` from `config/app_settings.json`, falling back to "Gesture Control".
-- Window icon path uses `ui/assets/icons/<app_name>.png` (lowercase, spaces -> underscores).
+- `webui/src/App.jsx` aligned with desktop workflows (settings, gestures, recognition control).
 
 ## Dependency setup notes
 - Install project deps via `pip install -e .` (pyproject.toml).
@@ -138,3 +147,10 @@ be the single source of context when resetting a session.
 - Experiments/spikes: `spike/<summary>` or `experiment/<summary>`.
 - Refactoring branches: `refactor/<area>`.
 - Release branches: `release/<version>`.
+
+## Recent integration notes
+- MediaPipe + TFLite pipeline replaced scikit-based gesture ML; models + labels live under `user_data/<user_id>/`.
+- Preset labels + CSVs copied from `data/presets/` into the user dataset on startup.
+- Default setting: `recognition_fps_cap` = 10 in `config/app_settings.json`.
+- `/commands/pending` is polled by the UI to surface command confirmation prompts.
+- PyAutoGUI failsafe triggered once; keep failsafe enabled.

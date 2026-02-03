@@ -2,138 +2,110 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-import webbrowser
+from command_controller.executors.base import ExecutionResult
+from command_controller.executors.pyautogui_executor import PyAutoGUIExecutor
+from command_controller.executors.router import OSRouter
+from command_controller.intents import WebExecutionError
+from utils.log_utils import tprint
+
+
+# Intents that can be promoted to web target when following an open_url(target="web").
+_WEB_CHAINABLE = {"type_text", "key_combo", "click", "scroll"}
 
 
 class Executor:
     def __init__(self) -> None:
-        self._last_opened_url: str | None = None
-        self._intent_handlers = {
-            "open_url": self._handle_open_url,
-            "wait_for_url": self._handle_wait_for_url,
-            "open_app": self._handle_open_app,
-            "key_combo": self._handle_key_combo,
-            "type_text": self._handle_type_text,
-            "scroll": self._handle_scroll,
-        }
+        self._web_executor = None  # lazy: WebExecutor
+        self._router = OSRouter(fallback=PyAutoGUIExecutor())
 
     def execute(self, action: str, payload: dict) -> None:
-        print(f"[EXECUTOR] Performing action='{action}' payload={payload}")
+        tprint(f"[EXECUTOR] Performing action='{action}' payload={payload}")
 
-    def execute_steps(self, steps: list[dict]) -> None:
+    def execute_steps(self, steps: list[dict]) -> list[dict]:
+        steps = self._infer_web_targets(steps)
+        results: list[dict] = []
         for step in steps:
-            self.execute_step(step)
-
-    def execute_step(self, step: dict) -> None:
-        intent = step.get("intent")
-        handler = self._intent_handlers.get(intent)
-        if handler:
-            handler(step)
-            return
-        print(f"[EXECUTOR] Unknown intent '{intent}'")
-
-    def _handle_open_url(self, step: dict) -> None:
-        url = step.get("url")
-        if url:
-            self._last_opened_url = str(url)
-            webbrowser.open(url)
-
-    def _handle_wait_for_url(self, step: dict) -> None:
-        url = step.get("url") or self._last_opened_url
-        if not url:
-            print("[EXECUTOR] wait_for_url missing url and no previous open_url")
-            return
-        timeout_secs = float(step.get("timeout_secs", 15))
-        interval_secs = float(step.get("interval_secs", 0.5))
-        self._wait_for_url(str(url), timeout_secs=timeout_secs, interval_secs=interval_secs)
-
-    def _handle_open_app(self, step: dict) -> None:
-        app = step.get("app")
-        if app:
-            self._open_app(app)
-
-    def _handle_key_combo(self, step: dict) -> None:
-        keys = step.get("keys", [])
-        print(f"[EXECUTOR] key_combo={keys}")
-        self._hotkey(keys)
-
-    def _handle_type_text(self, step: dict) -> None:
-        text = step.get("text", "")
-        self._type_text(text)
-
-    def _handle_scroll(self, step: dict) -> None:
-        direction = step.get("direction", "down")
-        amount = int(step.get("amount", 3))
-        self._scroll(direction, amount)
-
-    def _open_app(self, app: str) -> None:
-        if os.name == "nt":
-            subprocess.run(["cmd", "/c", "start", "", app], check=False)
-            return
-        if sys.platform == "darwin":
-            subprocess.run(["open", "-a", app], check=False)
-            return
-        subprocess.run(["xdg-open", app], check=False)
-
-    def _hotkey(self, keys: list[str]) -> None:
-        automation = self._automation()
-        if not automation:
-            print("[EXECUTOR] pyautogui not available; key_combo skipped")
-            return
-        normalized = self._normalize_keys(keys)
-        automation.hotkey(*normalized)
-
-    def _normalize_keys(self, keys: list[str]) -> list[str]:
-        if not keys:
-            return []
-        if sys.platform != "darwin":
-            return keys
-        mapped = []
-        for key in keys:
-            if key == "cmd":
-                mapped.append("command")
-            elif key == "option":
-                mapped.append("alt")
+            intent = str(step.get("intent", "")).strip()
+            target = step.get("target") or ("web" if intent.startswith("web_") else "os")
+            if target == "web":
+                result = self._execute_web_step(step)
             else:
-                mapped.append(key)
-        return mapped
+                result = self._router.execute_step(step)
+            results.append(result.to_dict())
+        return results
 
-    def _type_text(self, text: str) -> None:
-        automation = self._automation()
-        if not automation:
-            print("[EXECUTOR] pyautogui not available; type_text skipped")
-            return
-        automation.write(text, interval=0.02)
+    @staticmethod
+    def _infer_web_targets(steps: list[dict]) -> list[dict]:
+        """Promote chainable intents to target='web' after an open_url with target='web'.
 
-    def _scroll(self, direction: str, amount: int) -> None:
-        automation = self._automation()
-        if not automation:
-            print("[EXECUTOR] pyautogui not available; scroll skipped")
-            return
-        delta = amount * 100
-        automation.scroll(delta if direction == "up" else -delta)
+        Also drops wait_for_url steps inside web chains since Playwright handles
+        page-load waiting natively.
+        """
+        in_web_chain = False
+        out: list[dict] = []
+        for step in steps:
+            intent = step.get("intent", "")
+            target = step.get("target")
 
-    def _automation(self):
+            if intent == "open_url" and target == "web":
+                in_web_chain = True
+                out.append(step)
+                continue
+
+            if in_web_chain:
+                if intent == "wait_for_url":
+                    # Playwright handles waiting; skip this step.
+                    continue
+                if intent in _WEB_CHAINABLE:
+                    step = {**step, "target": "web"}
+                    out.append(step)
+                    continue
+                # Non-chainable intent breaks the web chain.
+                in_web_chain = False
+
+            out.append(step)
+        return out
+
+    def _get_web_executor(self):
+        if self._web_executor is None:
+            from command_controller.web_executor import WebExecutor
+            self._web_executor = WebExecutor()
+        return self._web_executor
+
+    def _execute_web_step(self, step: dict) -> ExecutionResult:
+        intent = str(step.get("intent", "")).strip() or "web"
         try:
-            import pyautogui
-        except Exception:
-            return None
-        return pyautogui
+            web_exec = self._get_web_executor()
+            web_exec.execute_step(step)
 
-    def _wait_for_url(self, url: str, *, timeout_secs: float, interval_secs: float) -> None:
-        import time
-        from urllib import request as urlrequest
-        from urllib.error import URLError, HTTPError
+            res_data = None
+            if hasattr(web_exec, "get_last_resolution"):
+                res_data = web_exec.get_last_resolution()
 
-        deadline = time.monotonic() + max(0.0, timeout_secs)
-        while time.monotonic() < deadline:
-            try:
-                with urlrequest.urlopen(url, timeout=5) as resp:
-                    if 200 <= resp.status < 400:
-                        return
-            except (URLError, HTTPError):
-                pass
-            time.sleep(max(0.05, interval_secs))
+            if res_data:
+                return ExecutionResult(
+                    intent=intent,
+                    status="ok",
+                    target="web",
+                    resolved_url=res_data.final_url,
+                    fallback_used=res_data.fallback_used,
+                    navigation_time_ms=res_data.elapsed_ms,
+                    dom_search_query=(
+                        res_data.resolution_details.search_query
+                        if res_data.resolution_details
+                        else None
+                    ),
+                )
+
+            return ExecutionResult(intent=intent, status="ok", target="web")
+        except WebExecutionError as exc:
+            return ExecutionResult(
+                intent=intent,
+                status="failed",
+                target="web",
+                details={
+                    "code": exc.code,
+                    "reason": str(exc),
+                    "screenshot_path": exc.screenshot_path,
+                },
+            )
