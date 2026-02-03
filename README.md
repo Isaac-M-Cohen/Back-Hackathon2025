@@ -156,7 +156,7 @@ flowchart TB
 - Desktop shell: Tauri (Rust) with a React + Vite UI (TailwindCSS).
 - Backend: Python 3.11, FastAPI + Uvicorn.
 - Gesture ML: MediaPipe Hands for landmarks, TFLite classifiers for inference.
-- Voice STT: OpenAI Realtime (websockets), WhisperLive, or local Whisper.
+- Voice STT: local Whisper (faster-whisper).
 - Command parsing: Local LLM via Ollama.
 - OS automation: PyAutoGUI.
 
@@ -181,9 +181,7 @@ flowchart TB
 ## Environment
 
 Common settings:
-- `OPENAI_API_KEY` for OpenAI Realtime STT.
-- `STT_PROVIDER` = `openai-realtime` | `whisperlive` | `whisper-local`.
-- `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_URL`, `OPENAI_TRANSCRIPTION_MODEL`.
+- `STT_PROVIDER` = `whisper-local`.
 - `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
 - `GESTURE_USER_ID` for per-user datasets.

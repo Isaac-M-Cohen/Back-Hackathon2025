@@ -7,7 +7,6 @@ dependencies = [
   "mediapipe>=0.10,<0.11",
   "opencv-python>=4.8,<5",
   "openai>=1.30,<2",
-  "websockets>=12,<13",
   "pyaudio>=0.2.14,<0.3",
   "python-dotenv>=1,<2",
   "faster-whisper>=1.0,<2",
