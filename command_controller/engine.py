@@ -9,10 +9,11 @@ from typing import Iterable
 
 from command_controller.confirmations import ConfirmationStore
 from command_controller.executor import Executor
-from command_controller.intents import normalize_steps, validate_steps
+from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
 from command_controller.llm import LocalLLMInterpreter, LocalLLMError
 from command_controller.logger import CommandLogger
-from utils.settings_store import deep_log
+from command_controller.subject_extractor import SubjectExtractor
+from utils.settings_store import deep_log, get_settings
 
 
 SENSITIVE_PATTERNS = re.compile(
@@ -20,7 +21,7 @@ SENSITIVE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-ALWAYS_CONFIRM_INTENTS = {"web_send_message"}
+ALWAYS_CONFIRM_INTENTS = {"web_send_message", "web_fill_form"}
 
 
 class CommandEngine:
@@ -37,6 +38,7 @@ class CommandEngine:
         self.confirmations = confirmations or ConfirmationStore()
         self.logger = logger or CommandLogger()
         self._last_result: dict | None = None
+        self._subject_extractor = SubjectExtractor(self.interpreter)
 
     def run(self, *, source: str, text: str, context: dict | None = None) -> dict:
         if not text.strip():
@@ -61,6 +63,13 @@ class CommandEngine:
             result = {"status": "ignored", "reason": "no_steps"}
             self._store_result(result)
             return result
+
+        # Optional subject extraction (if enabled)
+        settings = get_settings()
+        if settings.get("enable_subject_extraction", False):
+            subject_groups = self._subject_extractor.extract(text, steps)
+            deep_log(f"[DEEP][ENGINE] subject_groups={subject_groups}")
+            # Future: execute subject groups in parallel
 
         if self._requires_confirmation(text, steps):
             pending = self.confirmations.create(
@@ -165,7 +174,7 @@ class CommandEngine:
             except json.JSONDecodeError:
                 pass
         self.logger.info(f"LLM interpret: '{stripped}'")
-        return self.interpreter.interpret(text, context)
+        return self.interpreter.interpret(text, context, supported_intents=ALLOWED_INTENTS)
 
     def _insert_wait_for_url(self, steps: list[dict]) -> list[dict]:
         if not steps:

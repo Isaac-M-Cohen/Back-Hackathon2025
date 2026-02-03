@@ -78,6 +78,11 @@ class LocalLLMInterpreter:
             "Use this schema:\n"
             "{\n"
             '  "steps": [\n'
+            '    {"intent":"open_url","url":"https://...","target":"web"},\n'
+            '    {"intent":"type_text","text":"hello","target":"web","selector":"input[name=q]"},\n'
+            '    {"intent":"key_combo","keys":["enter"],"target":"web"},\n'
+            '    {"intent":"click","button":"left","clicks":1,"target":"web","selector":"button.submit"},\n'
+            '    {"intent":"scroll","direction":"down","amount":3},\n'
             '    {"intent":"open_url","url":"https://..."},\n'
             '    {"intent":"wait_for_url","url":"https://...","timeout_secs":15,"interval_secs":0.5},\n'
             '    {"intent":"open_app","app":"App Name"},\n'
@@ -95,13 +100,16 @@ class LocalLLMInterpreter:
             "}\n"
             "Rules:\n"
             "- Only output JSON. No markdown, no commentary.\n"
-            "- Use the smallest number of steps.\n"
+            "- Use the minimum number of steps that reliably complete the task.\n"
             "- If the request is ambiguous, return an empty steps list.\n"
             "- For copy/paste/cut/undo/redo/select all, use key_combo with cmd on macOS or ctrl on Windows.\n"
             "- Use mouse_move and click for multi-step workflows that require precise cursor positioning.\n"
             "- Prefer find_ui/invoke_ui over pixel-based clicks when possible.\n"
             "- For sending messages on WhatsApp, use web_send_message with contact (display name) and message. Do NOT use pixel-level clicks or type_text for WhatsApp.\n"
             "- web_send_message is a high-level intent. Never decompose it into open_url + type_text + click.\n"
+            "- When opening a URL for in-browser interaction (typing, clicking, etc.), set \"target\":\"web\" on the open_url step. Subsequent type_text, key_combo, click, and scroll steps will automatically run inside the browser.\n"
+            "- When target is \"web\", prefer using a CSS \"selector\" on type_text and click to target specific elements (e.g. \"input[name=search_query]\").\n"
+            "- Do NOT emit wait_for_url steps when using target:\"web\" — page-load waiting is handled automatically.\n"
             f"Context: {context_json}\n"
             f"Request: {text}"
         )

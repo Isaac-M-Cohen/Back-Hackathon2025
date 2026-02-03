@@ -27,6 +27,8 @@ ALLOWED_INTENTS = {
     "mouse_move",
     "click",
     "web_send_message",
+    "web_fill_form",
+    "web_request_permission",
     "find_ui",
     "invoke_ui",
     "wait_for_window",
@@ -127,6 +129,9 @@ def validate_step(step: dict) -> dict:
         if text == "":
             raise ValueError("type_text requires 'text'")
         cleaned["text"] = text
+        selector = step.get("selector")
+        if isinstance(selector, str) and selector.strip():
+            cleaned["selector"] = selector.strip()
         return cleaned
 
     if intent == "scroll":
@@ -170,6 +175,17 @@ def validate_step(step: dict) -> dict:
             raise ValueError("click requires integer 'clicks'")
         cleaned["button"] = button
         cleaned["clicks"] = max(1, clicks_int)
+        selector = step.get("selector")
+        if isinstance(selector, str) and selector.strip():
+            cleaned["selector"] = selector.strip()
+        x = step.get("x")
+        y = step.get("y")
+        if x is not None and y is not None:
+            try:
+                cleaned["x"] = int(x)
+                cleaned["y"] = int(y)
+            except (TypeError, ValueError):
+                pass
         return cleaned
 
     if intent == "web_send_message":
@@ -215,6 +231,34 @@ def validate_step(step: dict) -> dict:
             cleaned["timeout_secs"] = float(timeout)
         except (TypeError, ValueError):
             raise ValueError("wait_for_window requires numeric 'timeout_secs'")
+        return cleaned
+
+    if intent == "web_fill_form":
+        form_fields = step.get("form_fields")
+        if not isinstance(form_fields, dict) or not form_fields:
+            raise ValueError("web_fill_form requires non-empty 'form_fields' dict")
+
+        # Validate selectors are strings
+        cleaned_fields = {}
+        for selector, value in form_fields.items():
+            if not isinstance(selector, str) or not selector.strip():
+                raise ValueError(
+                    "web_fill_form field selectors must be non-empty strings"
+                )
+            cleaned_fields[selector.strip()] = str(value)
+
+        cleaned["form_fields"] = cleaned_fields
+        cleaned["submit"] = bool(step.get("submit", False))
+        cleaned["target"] = "web"
+        return cleaned
+
+    if intent == "web_request_permission":
+        permission_type = str(step.get("permission_type", "")).strip()
+        if not permission_type:
+            raise ValueError("web_request_permission requires 'permission_type'")
+
+        cleaned["permission_type"] = permission_type
+        cleaned["target"] = "web"
         return cleaned
 
     raise ValueError(f"Unsupported intent '{intent}'")

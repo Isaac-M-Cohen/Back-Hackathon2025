@@ -182,7 +182,6 @@ flowchart TB
 
 Common settings:
 - `STT_PROVIDER` = `whisper-local`.
-- `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
 - `GESTURE_USER_ID` for per-user datasets.
 - `ENABLE_VOICE=0` to disable voice features.
