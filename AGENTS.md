@@ -15,7 +15,7 @@ be the single source of context when resetting a session.
 - `command_controller/`: command routing (`controller.py`), execution (`executor.py` placeholder), logging (`logger.py`).
 - `gesture_module/`: realtime recognizer (`gesture_recognizer.py`), workflow wrapper (`workflow.py`), basic tracking (`hand_tracking.py`).
 - `video_module/gesture_ml.py`: dataset + sample collection for TFLite keypoint/point-history classifiers.
-- `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), whisper backends.
+- `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), local Whisper backend.
 - `api/server.py`: FastAPI endpoints used by the React UI.
 - `webui/`: React + Vite UI (`webui/src/App.jsx`, `webui/src/api.js`).
 - `config/`: JSON configs for gestures, voice, app settings, and command mapping.

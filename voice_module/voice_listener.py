@@ -1,4 +1,4 @@
-"""Listens for audio input and forwards recognized commands."""
+"""Listens for audio input and forwards recognized commands via local Whisper."""
 import asyncio
 import base64
 import threading
@@ -57,7 +57,7 @@ class VoiceListener:
                 # Mark thread as finished so is_running reflects completion.
                 self._thread = None
 
-        tprint("[VOICE] Listener starting (mic -> local STT)...")
+        tprint("[VOICE] Listener starting (mic -> local Whisper)...")
         self._thread = threading.Thread(
             target=_runner, name="VoiceListenerMic", daemon=False
         )

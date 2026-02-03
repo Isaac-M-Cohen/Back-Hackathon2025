@@ -1,4 +1,4 @@
-"""Speech-to-text engine with local Whisper support."""
+"""Speech-to-text engine with local-only Whisper support."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from voice_module.stt_whisper_local import WhisperLocalEngine
 
 
 class SpeechToTextEngine:
-    """Runs local Whisper transcription."""
+    """Runs local Whisper transcription only."""
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class SpeechToTextEngine:
         _ = timeout_seconds
         if self.provider != "whisper-local":
             raise RuntimeError(
-                f"Unsupported STT_PROVIDER '{self.provider}'. Use 'whisper-local'."
+                f"Unsupported STT_PROVIDER '{self.provider}'. Only 'whisper-local' is supported."
             )
         return await self._transcribe_whisper_local(audio_stream)
 

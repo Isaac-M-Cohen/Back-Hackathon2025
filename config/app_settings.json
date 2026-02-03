@@ -17,7 +17,7 @@
   "log_level_affects": "DEEP enables cross-system tracing for commands/gestures.",
   "theme_comment": "theme: light | dark | system",
   "log_level_hint": "log_level: ERROR | WARN | INFO | DEBUG | DEEP",
-  "stt_provider_hint": "STT provider configured via env: whisper-local",
+  "stt_provider_hint": "STT provider configured via env: whisper-local only",
   "command_parse_timeout_secs": 15,
   "command_parse_timeout_hint": "Timeout for LLM command parsing in /gestures/command.",
   "microphone_device_index": null,

@@ -40,6 +40,5 @@ video_module/video_stream.py
 voice_module/__init__.py
 voice_module/stt_engine.py
 voice_module/stt_whisper_local.py
-voice_module/stt_whisperlive.py
 voice_module/voice_listener.py
 voice_module/voice_utils.py
