@@ -31,7 +31,6 @@ dist/
 .vscode/
 
 # Misc
-.claude/
 webui/EndpointsStructure.txt
 user_data/
 data/user_data/

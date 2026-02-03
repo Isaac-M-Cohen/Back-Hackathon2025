@@ -83,7 +83,7 @@ flowchart TB
   %% =========================
   subgraph Voice["Voice Pipeline (optional)"]
     vlisten["VoiceListener\n(voice_module/voice_listener.py)\nmic stream"]
-    stt["STT Engine\n(voice_module/stt_engine.py)\nLocal Whisper"]
+    stt["STT Engine\n(voice_module/stt_engine.py)\nOpenAI Realtime / WhisperLive / Local"]
     mic["Microphone"]
     transcript["Transcript text"]
   end
@@ -156,7 +156,7 @@ flowchart TB
 - Desktop shell: Tauri (Rust) with a React + Vite UI (TailwindCSS).
 - Backend: Python 3.11, FastAPI + Uvicorn.
 - Gesture ML: MediaPipe Hands for landmarks, TFLite classifiers for inference.
-- Voice STT: local Whisper (faster-whisper).
+- Voice STT: OpenAI Realtime (websockets), WhisperLive, or local Whisper.
 - Command parsing: Local LLM via Ollama.
 - OS automation: PyAutoGUI.
 
@@ -181,7 +181,9 @@ flowchart TB
 ## Environment
 
 Common settings:
-- `STT_PROVIDER` = `whisper-local`.
+- `OPENAI_API_KEY` for OpenAI Realtime STT.
+- `STT_PROVIDER` = `openai-realtime` | `whisperlive` | `whisper-local`.
+- `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_URL`, `OPENAI_TRANSCRIPTION_MODEL`.
 - `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
 - `GESTURE_USER_ID` for per-user datasets.
