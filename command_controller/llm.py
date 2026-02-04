@@ -89,6 +89,7 @@ class LocalLLMInterpreter:
             '    {"intent":"open_file","path":"/path/to/file"},\n'
             '    {"intent":"key_combo","keys":["cmd","l"]},\n'
             '    {"intent":"type_text","text":"hello"},\n'
+            '    {"intent":"scroll","direction":"down","amount":3},\n'
             '    {"intent":"mouse_move","x":100,"y":200},\n'
             '    {"intent":"click","button":"left","clicks":1},\n'
             '    {"intent":"find_ui","selector":{"app":"App","window_title":"Title","role":"button","name":"OK","contains":true}},\n'

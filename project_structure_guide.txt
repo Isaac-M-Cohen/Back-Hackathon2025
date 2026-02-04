@@ -63,8 +63,7 @@ voice_module/voice_listener.py
   controller.handle_event(source="voice", action=transcription)
 
 voice_module/stt_engine.py
-- Provider switch based on STT_PROVIDER env:
-  - "whisper-local"
+- Local-only STT; STT_PROVIDER is supported for compatibility but must be "whisper-local".
 - Expected public method:
   async transcribe_stream(audio_stream) -> str transcript
 
@@ -108,7 +107,6 @@ SETTINGS + ENVIRONMENT (voice-related)
 
 Environment variables (STT providers):
 - STT_PROVIDER = whisper-local
-- WHISPERLIVE_URL, WHISPERLIVE_MODEL, WHISPERLIVE_LANGUAGE, WHISPERLIVE_CHUNK_MS
 - LOCAL_WHISPER_MODEL_PATH, LOCAL_WHISPER_DEVICE, LOCAL_WHISPER_COMPUTE_TYPE
 
 Runtime settings:
@@ -135,8 +133,8 @@ Basic local test:
 - Call start() and say a simple command like "open chrome".
 - Confirm controller receives transcript and prints command logs.
 
-If using OpenAI Realtime:
-- Ensure local Whisper model is available or configured.
+Local-only note:
+- Ensure a local Whisper model is available or configured.
 
 ------------------------------------------------------------
 SUMMARY

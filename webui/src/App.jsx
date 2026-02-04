@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, MoreVertical, Trash2, Play, Pause, Settings } from "lucide-react";
+import { Plus, MoreVertical, Trash2, Play, Pause, Settings, Camera, Mic } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
 
 function detectClientOs() {
@@ -25,12 +25,20 @@ export default function GestureControlApp() {
   const [gestures, setGestures] = useState([]);
   const [allGestures, setAllGestures] = useState([]);
   const [presetGestures, setPresetGestures] = useState([]);
-  const [isRunning, setIsRunning] = useState(false);
+  const [isGestureRunning, setIsGestureRunning] = useState(false);
+  const [isVoiceRunning, setIsVoiceRunning] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [hoveredId, setHoveredId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [error, setError] = useState("");
   const [lastDetection, setLastDetection] = useState(null);
+  const [voiceStatus, setVoiceStatus] = useState({
+    running: false,
+    live_transcript: "",
+    final_transcript: "",
+    subjects: [],
+    audio_level: 0,
+  });
   const [pollIntervalMs, setPollIntervalMs] = useState(1000);
   const [pendingCommands, setPendingCommands] = useState([]);
   const [lastCommand, setLastCommand] = useState(null);
@@ -151,7 +159,7 @@ export default function GestureControlApp() {
   }, []);
 
   useEffect(() => {
-    if (!isRunning) {
+    if (!isGestureRunning) {
       setLastDetection(null);
       return undefined;
     }
@@ -163,14 +171,57 @@ export default function GestureControlApp() {
         }
         const status = await Api.status();
         if (status && status.recognition_running === false) {
-          setIsRunning(false);
+          setIsGestureRunning(false);
         }
       } catch (err) {
         console.error(err);
       }
     }, pollIntervalMs);
     return () => clearInterval(id);
-  }, [isRunning, pollIntervalMs]);
+  }, [isGestureRunning, pollIntervalMs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await Api.voiceStatus();
+        if (!cancelled && status) {
+          setVoiceStatus(status);
+          setIsVoiceRunning(Boolean(status.running));
+        }
+      } catch {
+        // Voice endpoint optional.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (!isVoiceRunning) {
+        setVoiceStatus((prev) => ({
+          ...prev,
+          running: false,
+          audio_level: 0,
+        }));
+        return;
+      }
+      try {
+        const status = await Api.voiceStatus();
+        if (status) {
+          setVoiceStatus(status);
+          if (status.running === false) {
+            setIsVoiceRunning(false);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, pollIntervalMs);
+    return () => clearInterval(id);
+  }, [isVoiceRunning, pollIntervalMs]);
 
   useEffect(() => {
     const id = setInterval(async () => {
@@ -298,26 +349,43 @@ export default function GestureControlApp() {
     }
   };
 
-  const toggleRecognition = async () => {
+  const toggleGestureRecognition = async () => {
     try {
-      if (isRunning) {
+      if (isGestureRunning) {
         try {
           await Api.stopRecognition();
         } finally {
-          setIsRunning(false);
+          setIsGestureRunning(false);
           setLastDetection(null);
           refreshGestures().catch(() => {});
           refreshPresets().catch(() => {});
         }
       } else {
         await Api.startRecognition({ show_window: false });
-        setIsRunning(true);
+        setIsGestureRunning(true);
       }
     } catch (err) {
       setError(err.message || "Failed to start/stop recognition. Collect and train first?");
-      if (isRunning) {
-        setIsRunning(false);
+      if (isGestureRunning) {
+        setIsGestureRunning(false);
         setLastDetection(null);
+      }
+    }
+  };
+
+  const toggleVoiceRecognition = async () => {
+    try {
+      if (isVoiceRunning) {
+        await Api.stopVoice();
+        setIsVoiceRunning(false);
+      } else {
+        await Api.startVoice();
+        setIsVoiceRunning(true);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to start/stop voice recognition.");
+      if (isVoiceRunning) {
+        setIsVoiceRunning(false);
       }
     }
   };
@@ -423,6 +491,33 @@ export default function GestureControlApp() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-light text-gray-800">Gesture Control</h1>
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200 bg-white">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isGestureRunning ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <Camera size={14} className="text-gray-600" />
+              <span className="text-[11px] text-gray-600">Camera</span>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200 bg-white">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isVoiceRunning ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <Mic size={14} className="text-gray-600" />
+              <div className="w-10 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-2 transition-all ${
+                    isVoiceRunning ? "bg-green-500" : "bg-gray-400"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(0, (voiceStatus.audio_level || 0) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
             <button
               onClick={openSettings}
               className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-100"
@@ -432,15 +527,26 @@ export default function GestureControlApp() {
               <Settings size={18} />
             </button>
             <button
-              onClick={toggleRecognition}
+              onClick={toggleGestureRecognition}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-sm ${
-                isRunning
+                isGestureRunning
                   ? "bg-green-500 text-white hover:bg-green-600"
                   : "bg-gray-300 text-gray-700 hover:bg-gray-400"
               }`}
             >
-              {isRunning ? <Pause size={16} /> : <Play size={16} />}
-              {isRunning ? "Running" : "Stopped"}
+              {isGestureRunning ? <Pause size={16} /> : <Play size={16} />}
+              {isGestureRunning ? "Gesture On" : "Gesture Off"}
+            </button>
+            <button
+              onClick={toggleVoiceRecognition}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-sm ${
+                isVoiceRunning
+                  ? "bg-green-500 text-white hover:bg-green-600"
+                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+              }`}
+            >
+              {isVoiceRunning ? <Pause size={16} /> : <Play size={16} />}
+              {isVoiceRunning ? "Voice On" : "Voice Off"}
             </button>
           </div>
         </div>
@@ -451,13 +557,33 @@ export default function GestureControlApp() {
           </div>
         )}
 
-        {lastDetection && (
+        {isGestureRunning && lastDetection && (
           <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm flex items-center justify-between">
             <span>
               Detected: <strong>{lastDetection.label}</strong>{" "}
               {lastDetection.confidence !== undefined &&
                 `(conf ${lastDetection.confidence.toFixed(2)})`}
             </span>
+          </div>
+        )}
+
+        {isVoiceRunning && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>
+                Transcribed:{" "}
+                <strong>
+                  {voiceStatus.live_transcript
+                    ? voiceStatus.live_transcript
+                    : "Listening..."}
+                </strong>
+              </span>
+            </div>
+            {Array.isArray(voiceStatus.subjects) && voiceStatus.subjects.length > 0 && (
+              <div className="mt-2 text-xs text-amber-800">
+                Subjects: {voiceStatus.subjects.join(", ")}
+              </div>
+            )}
           </div>
         )}
 

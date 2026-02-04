@@ -123,6 +123,15 @@ export const Api = {
   async lastDetection() {
     return request("/recognition/last");
   },
+  async startVoice() {
+    return request("/voice/start", { method: "POST" });
+  },
+  async stopVoice() {
+    return request("/voice/stop", { method: "POST" });
+  },
+  async voiceStatus() {
+    return request("/voice/status");
+  },
   async deleteGesture(label) {
     return request("/gestures/delete", {
       method: "POST",

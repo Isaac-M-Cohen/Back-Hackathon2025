@@ -83,7 +83,7 @@ flowchart TB
   %% =========================
   subgraph Voice["Voice Pipeline (optional)"]
     vlisten["VoiceListener\n(voice_module/voice_listener.py)\nmic stream"]
-    stt["STT Engine\n(voice_module/stt_engine.py)\nOpenAI Realtime / WhisperLive / Local"]
+    stt["STT Engine\n(voice_module/stt_engine.py)\nLocal Whisper only"]
     mic["Microphone"]
     transcript["Transcript text"]
   end

@@ -51,11 +51,9 @@ class BaseExecutor:
     def execute_step(self, step: dict) -> ExecutionResult:
         raise NotImplementedError
 
-
 class ResolutionMetadataProvider(Protocol):
     """Protocol for executors that provide URL resolution metadata."""
 
     def get_last_resolution(self) -> FallbackResult | None:
         """Return metadata from the most recent URL resolution, if any."""
         ...
-
