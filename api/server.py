@@ -20,11 +20,13 @@ from pydantic import BaseModel, Field
 
 from command_controller.controller import CommandController
 from command_controller.intents import ALLOWED_INTENTS, normalize_steps, validate_steps
+from command_controller.subject_extractor import SubjectExtractor
 from gesture_module.workflow import GestureWorkflow
 from utils.file_utils import load_json
 from utils.log_utils import tprint
 from utils.settings_store import refresh_settings, is_deep_logging, get_settings
 from utils.runtime_state import get_client_os, set_client_os
+from voice_module.voice_listener import VoiceListener
 
 USER_ID = os.getenv("GESTURE_USER_ID", "default")
 OLLAMA_URL = os.getenv("EASY_OLLAMA_URL", "http://127.0.0.1:11434")
@@ -35,6 +37,16 @@ _OLLAMA_CHECKED = False
 
 controller = CommandController(user_id=USER_ID)
 workflow = GestureWorkflow(user_id=USER_ID)
+subject_extractor = SubjectExtractor(controller.engine.interpreter)
+voice_listener: VoiceListener | None = None
+voice_state: dict[str, Any] = {
+    "running": False,
+    "live_transcript": "",
+    "final_transcript": "",
+    "subjects": [],
+    "audio_level": 0.0,
+    "updated_at": None,
+}
 
 app = FastAPI(title="Gesture Control API", version="0.1.0")
 
@@ -55,6 +67,11 @@ def _shutdown_cleanup() -> None:
         workflow.stop_recognition()
     except Exception as exc:
         tprint(f"[API] Shutdown cleanup failed: {exc}")
+    try:
+        if voice_listener is not None:
+            voice_listener.stop()
+    except Exception as exc:
+        tprint(f"[API] Voice cleanup failed: {exc}")
     try:
         web_exec = getattr(controller.engine.executor, "_web_executor", None)
         if web_exec is not None:
@@ -143,6 +160,11 @@ def update_settings(payload: dict[str, Any]):
         "log_command_debug",
         "microphone_device_index",
         "speaker_device_index",
+        "voice_pause_threshold_ms",
+        "voice_live_transcribe_interval_ms",
+        "voice_min_command_seconds",
+        "voice_audio_level_threshold",
+        "voice_partial_window_secs",
     }
     updates = {key: value for key, value in payload.items() if key in allowed}
     if not updates:
@@ -315,6 +337,88 @@ def stop_recognition():
         # Prevent a crash from propagating to the UI; log and return ok.
         tprint(f"[API] Failed to stop recognition: {exc}")
     return {"status": "ok"}
+
+
+def _extract_subjects(text: str) -> list[str]:
+    if not text.strip():
+        return []
+    try:
+        payload = controller.engine.interpreter.interpret(text, {}, ALLOWED_INTENTS)
+        steps = validate_steps(normalize_steps(payload))
+    except Exception as exc:
+        tprint(f"[API] Subject extraction failed: {exc}")
+        return []
+    groups = subject_extractor.extract(text, steps)
+    ordered = sorted(groups, key=lambda group: group.start_index)
+    return [group.subject_name for group in ordered if group.subject_name]
+
+
+def _update_voice_state(**updates: Any) -> None:
+    voice_state.update(updates)
+    voice_state["updated_at"] = time.time()
+
+
+@app.post("/voice/start")
+def start_voice():
+    global voice_listener
+    if voice_listener and voice_listener.is_running():
+        return {"status": "ok", "running": True}
+
+    settings = load_json("config/app_settings.json")
+    pause_threshold_secs = float(settings.get("voice_pause_threshold_ms", 1200)) / 1000.0
+    live_interval_secs = float(settings.get("voice_live_transcribe_interval_ms", 1200)) / 1000.0
+    min_command_seconds = float(settings.get("voice_min_command_seconds", 0.6))
+    audio_level_threshold = float(settings.get("voice_audio_level_threshold", 0.02))
+    partial_window_secs = float(settings.get("voice_partial_window_secs", 8.0))
+
+    def _handle_partial(text: str) -> None:
+        _update_voice_state(live_transcript=text)
+
+    def _handle_final(text: str) -> None:
+        subjects = _extract_subjects(text)
+        _update_voice_state(
+            final_transcript=text,
+            live_transcript=text,
+            subjects=subjects,
+        )
+
+    def _handle_level(level: float) -> None:
+        _update_voice_state(audio_level=level)
+
+    voice_listener = VoiceListener(
+        controller,
+        listen_seconds=None,
+        chunk_size=4096,
+        single_batch=False,
+        log_token_usage=False,
+        on_partial_transcript=_handle_partial,
+        on_final_transcript=_handle_final,
+        on_audio_level=_handle_level,
+        pause_threshold_secs=pause_threshold_secs,
+        live_transcribe_interval_secs=live_interval_secs,
+        min_command_seconds=min_command_seconds,
+        audio_level_threshold=audio_level_threshold,
+        partial_window_secs=partial_window_secs,
+    )
+    voice_listener.start()
+    _update_voice_state(running=True)
+    return {"status": "ok", "running": True}
+
+
+@app.post("/voice/stop")
+def stop_voice():
+    global voice_listener
+    if voice_listener:
+        voice_listener.stop()
+    _update_voice_state(running=False, audio_level=0.0)
+    return {"status": "ok", "running": False}
+
+
+@app.get("/voice/status")
+def voice_status():
+    running = bool(voice_listener and voice_listener.is_running())
+    voice_state["running"] = running
+    return voice_state
 
 
 @app.get("/status")

@@ -20,6 +20,11 @@
   "stt_provider_hint": "STT provider configured via env: whisper-local only",
   "command_parse_timeout_secs": 15,
   "command_parse_timeout_hint": "Timeout for LLM command parsing in /gestures/command.",
+  "voice_pause_threshold_ms": 1200,
+  "voice_live_transcribe_interval_ms": 1200,
+  "voice_min_command_seconds": 0.6,
+  "voice_audio_level_threshold": 0.02,
+  "voice_partial_window_secs": 8,
   "microphone_device_index": null,
   "speaker_device_index": null
 }

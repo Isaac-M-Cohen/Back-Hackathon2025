@@ -39,6 +39,16 @@ class SpeechToTextEngine:
             )
         return await self._transcribe_whisper_local(audio_stream)
 
+    async def transcribe_audio_bytes(self, audio_bytes: bytes) -> str:
+        """Run local Whisper on raw audio bytes and return the transcript."""
+        if self.provider != "whisper-local":
+            raise RuntimeError(
+                f"Unsupported STT_PROVIDER '{self.provider}'. Only 'whisper-local' is supported."
+            )
+        if self._whisper_local is None:
+            self._whisper_local = WhisperLocalEngine(language=self.transcription_language)
+        return await _to_thread(self._whisper_local.transcribe_audio_bytes, audio_bytes)
+
     async def _transcribe_whisper_local(
         self, audio_stream: AsyncIterable[bytes | str] | Iterable[bytes | str]
     ) -> str:
@@ -46,3 +56,13 @@ class SpeechToTextEngine:
         if self._whisper_local is None:
             self._whisper_local = WhisperLocalEngine(language=self.transcription_language)
         return await self._whisper_local.transcribe_stream(audio_stream)
+
+    def format_usage(self) -> str | None:
+        """Local STT does not report token usage."""
+        return None
+
+
+async def _to_thread(func, *args, **kwargs):
+    import asyncio
+
+    return await asyncio.to_thread(func, *args, **kwargs)

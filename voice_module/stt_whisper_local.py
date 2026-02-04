@@ -57,6 +57,12 @@ class WhisperLocalEngine:
 
         if not audio_bytes:
             return ""
+        return self.transcribe_audio_bytes(bytes(audio_bytes))
+
+    def transcribe_audio_bytes(self, audio_bytes: bytes) -> str:
+        """Run local Whisper on raw PCM16 bytes and return text."""
+        if not audio_bytes:
+            return ""
 
         # Convert raw PCM16 bytes to float32 numpy array scaled to [-1, 1].
         audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
