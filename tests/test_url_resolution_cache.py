@@ -91,13 +91,12 @@ class TestURLResolutionCache:
         cache.put("query3", MockResolutionResult("https://example3.com"))
 
         assert cache.size() == 3
-        assert cache.get("query1") is not None
 
         # Add 4th entry - should evict query1 (least recently used)
         cache.put("query4", MockResolutionResult("https://example4.com"))
 
         assert cache.size() == 3
-        assert cache.get("query1") is None  # Evicted
+        assert cache.get("query1") is None  # Evicted (was LRU)
         assert cache.get("query2") is not None
         assert cache.get("query3") is not None
         assert cache.get("query4") is not None
@@ -222,3 +221,47 @@ class TestURLResolutionCache:
         assert cache.size() == 1000
         assert cache.get("query0") is None  # First entry evicted
         assert cache.get("query999") is not None  # Last entry still present
+
+    # -----------------------------------------------------------------
+    # Issue 5 - Cache Key Normalization Tests
+    # -----------------------------------------------------------------
+
+    def test_key_normalization_case_insensitive(self):
+        """Test that cache keys are case-insensitive."""
+        cache = URLResolutionCache(ttl_secs=900)
+        cache.put("YouTube", MockResolutionResult("https://youtube.com"))
+
+        # Should find with different cases
+        assert cache.get("youtube") is not None
+        assert cache.get("YOUTUBE") is not None
+        assert cache.get("YouTube") is not None
+
+    def test_key_normalization_whitespace(self):
+        """Test that cache normalizes whitespace."""
+        cache = URLResolutionCache(ttl_secs=900)
+        cache.put("  cat   videos  ", MockResolutionResult("https://example.com"))
+
+        # Should find with normalized whitespace
+        assert cache.get("cat videos") is not None
+        assert cache.get("  cat   videos  ") is not None
+
+    def test_key_too_long_skips_cache(self):
+        """Test that overly long queries skip caching."""
+        cache = URLResolutionCache(ttl_secs=900)
+        long_query = "a" * 600  # Exceeds MAX_KEY_LENGTH (500)
+
+        cache.put(long_query, MockResolutionResult("https://example.com"))
+
+        # Should not be cached
+        assert cache.get(long_query) is None
+        assert cache.size() == 0
+
+    def test_key_at_max_length_is_cached(self):
+        """Test that queries at exactly max length are cached."""
+        cache = URLResolutionCache(ttl_secs=900)
+        max_query = "a" * 500  # Exactly MAX_KEY_LENGTH
+
+        cache.put(max_query, MockResolutionResult("https://example.com"))
+
+        assert cache.get(max_query) is not None
+        assert cache.size() == 1

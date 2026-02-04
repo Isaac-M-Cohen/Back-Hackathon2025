@@ -132,8 +132,9 @@ class FallbackChain:
                 )
 
             if is_deep_logging():
+                cache_msg = " (cached)" if resolution.from_cache else ""
                 deep_log(
-                    f"[DEEP][FALLBACK_CHAIN] Direct resolution failed: {resolution.error_message}"
+                    f"[DEEP][FALLBACK_CHAIN] Direct resolution failed{cache_msg}: {resolution.error_message}"
                 )
 
         except Exception as exc:

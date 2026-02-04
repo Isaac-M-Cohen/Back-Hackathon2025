@@ -22,6 +22,8 @@ class CacheEntry:
 class URLResolutionCache:
     """In-memory cache with TTL and LRU eviction for URL resolutions."""
 
+    MAX_KEY_LENGTH = 500  # Maximum query length for caching
+
     def __init__(self, ttl_secs: int = 900, max_size: int = 100) -> None:
         """Initialize cache with TTL and max size.
 
@@ -33,6 +35,23 @@ class URLResolutionCache:
         self._ttl = ttl_secs
         self._max_size = max_size
 
+    def _normalize_key(self, query: str) -> str | None:
+        """Normalize cache key for consistent lookup.
+
+        Args:
+            query: Search query (cache key)
+
+        Returns:
+            Normalized key or None if query is too long
+        """
+        # Validate length to prevent DoS
+        if len(query) > self.MAX_KEY_LENGTH:
+            return None
+
+        # Normalize case and whitespace for better cache hit rates
+        normalized = " ".join(query.lower().strip().split())
+        return normalized
+
     def get(self, query: str) -> URLResolutionResult | None:
         """Retrieve cached result if not expired.
 
@@ -42,7 +61,11 @@ class URLResolutionCache:
         Returns:
             URLResolutionResult if found and not expired, None otherwise
         """
-        entry = self._cache.get(query)
+        key = self._normalize_key(query)
+        if key is None:
+            return None  # Query too long, skip cache
+
+        entry = self._cache.get(key)
         if entry is None:
             return None
 
@@ -50,11 +73,11 @@ class URLResolutionCache:
         age = time.time() - entry.timestamp
         if age > self._ttl:
             # Expired, remove from cache
-            del self._cache[query]
+            del self._cache[key]
             return None
 
         # Move to end (mark as recently used)
-        self._cache.move_to_end(query)
+        self._cache.move_to_end(key)
         return entry.result
 
     def put(self, query: str, result: URLResolutionResult) -> None:
@@ -64,13 +87,17 @@ class URLResolutionCache:
             query: Search query (cache key)
             result: URLResolutionResult to cache
         """
+        key = self._normalize_key(query)
+        if key is None:
+            return  # Query too long, skip caching
+
         # Proactively clean up expired entries before adding (performance optimization)
         self._prune_expired()
 
         # If already exists, update and move to end
-        if query in self._cache:
-            self._cache[query] = CacheEntry(result=result, timestamp=time.time())
-            self._cache.move_to_end(query)
+        if key in self._cache:
+            self._cache[key] = CacheEntry(result=result, timestamp=time.time())
+            self._cache.move_to_end(key)
             return
 
         # Check if we need to evict oldest entry
@@ -79,7 +106,7 @@ class URLResolutionCache:
             self._cache.popitem(last=False)
 
         # Add new entry at end (most recently used)
-        self._cache[query] = CacheEntry(result=result, timestamp=time.time())
+        self._cache[key] = CacheEntry(result=result, timestamp=time.time())
 
     def _prune_expired(self) -> None:
         """Remove all expired entries from cache.
