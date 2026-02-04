@@ -78,8 +78,10 @@ class Executor:
             web_exec = self._get_web_executor()
             web_exec.execute_step(step)
 
-            # Check for resolution metadata using protocol method
-            res_data = web_exec.get_last_resolution()
+            res_data = None
+            if hasattr(web_exec, "get_last_resolution"):
+                res_data = web_exec.get_last_resolution()
+
             if res_data:
                 return ExecutionResult(
                     intent=intent,

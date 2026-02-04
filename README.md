@@ -83,7 +83,7 @@ flowchart TB
   %% =========================
   subgraph Voice["Voice Pipeline (optional)"]
     vlisten["VoiceListener\n(voice_module/voice_listener.py)\nmic stream"]
-    stt["STT Engine\n(voice_module/stt_engine.py)\nOpenAI Realtime / WhisperLive / Local"]
+    stt["STT Engine\n(voice_module/stt_engine.py)\nLocal Whisper only"]
     mic["Microphone"]
     transcript["Transcript text"]
   end
@@ -239,7 +239,6 @@ URL: https://www.youtube.com/results?search_query=cats
 
 Common settings:
 - `STT_PROVIDER` = `whisper-local`.
-- `WHISPERLIVE_URL`, `WHISPERLIVE_MODEL`.
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
 - `GESTURE_USER_ID` for per-user datasets.
 - `ENABLE_VOICE=0` to disable voice features.
