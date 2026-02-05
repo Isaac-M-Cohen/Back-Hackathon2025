@@ -172,6 +172,9 @@ def update_settings(payload: dict[str, Any]):
         "voice_pre_roll_secs",
         "voice_min_gap_secs",
         "voice_use_legacy_pause_threshold",
+        "voice_noise_gate_enabled",
+        "voice_noise_gate_threshold",
+        "voice_noise_gate_attenuation",
         # Legacy voice settings (kept for backwards compatibility)
         "voice_pause_threshold_ms",
         "voice_live_transcribe_interval_ms",
@@ -572,6 +575,9 @@ def start_voice():
     pre_roll_secs = float(settings.get("voice_pre_roll_secs", 0.25))
     min_gap_secs = float(settings.get("voice_min_gap_secs", 0.25))
     send_to_executor = bool(settings.get("voice_send_to_executor", False))
+    noise_gate_enabled = bool(settings.get("voice_noise_gate_enabled", True))
+    noise_gate_threshold = float(settings.get("voice_noise_gate_threshold", 0.01))
+    noise_gate_attenuation = float(settings.get("voice_noise_gate_attenuation", 0.2))
     # Legacy settings (only used if explicitly enabled)
     use_legacy_pause = bool(settings.get("voice_use_legacy_pause_threshold", False))
     audio_level_threshold = float(settings.get("voice_audio_level_threshold", silence_threshold))
@@ -620,6 +626,9 @@ def start_voice():
         min_voice_duration_secs=min_voice_duration_secs,
         pre_roll_secs=pre_roll_secs,
         min_gap_secs=min_gap_secs,
+        noise_gate_enabled=noise_gate_enabled,
+        noise_gate_threshold=noise_gate_threshold,
+        noise_gate_attenuation=noise_gate_attenuation,
         # Legacy parameters (VoiceListener maps these internally)
         pause_threshold_secs=pause_threshold_secs,
         min_command_seconds=min_command_seconds,

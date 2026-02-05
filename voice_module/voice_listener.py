@@ -43,6 +43,9 @@ class VoiceListener:
         min_voice_duration_secs: float = 0.12,
         pre_roll_secs: float = 0.25,
         min_gap_secs: float = 0.25,
+        noise_gate_enabled: bool = True,
+        noise_gate_threshold: float = 0.01,
+        noise_gate_attenuation: float = 0.2,
         # Legacy compatibility parameters (mapped to new ones)
         pause_threshold_secs: float | None = None,
         live_transcribe_interval_secs: float | None = None,
@@ -71,6 +74,9 @@ class VoiceListener:
         self.min_voice_duration_secs = max(0.0, min_voice_duration_secs)
         self.pre_roll_secs = max(0.0, pre_roll_secs)
         self.min_gap_secs = max(0.0, min_gap_secs)
+        self.noise_gate_enabled = bool(noise_gate_enabled)
+        self.noise_gate_threshold = max(0.0, float(noise_gate_threshold))
+        self.noise_gate_attenuation = min(1.0, max(0.0, float(noise_gate_attenuation)))
 
         # Ensure valid ranges
         self.silence_threshold = max(0.0, self.silence_threshold)
@@ -202,6 +208,7 @@ class VoiceListener:
         voice_active_start: float | None = None
         bytes_per_sample = 2  # 16-bit audio
         pre_roll_frames = max(0, int((self.pre_roll_secs * sample_rate) / self.chunk_size))
+        frame_bytes = int(sample_rate * 0.01) * bytes_per_sample
 
         try:
             if self._last_record_end_time:
@@ -220,6 +227,11 @@ class VoiceListener:
                 level = self._compute_audio_level(data)
                 if self.on_audio_level:
                     self.on_audio_level(level)
+
+                if self.noise_gate_enabled:
+                    cleaned = self._apply_noise_gate(data, level)
+                else:
+                    cleaned = data
 
                 now = time.monotonic()
 
@@ -243,7 +255,7 @@ class VoiceListener:
 
                 # Only buffer audio once recording has started
                 if recording_started:
-                    audio_chunks.append(data)
+                    audio_chunks.append(cleaned or data)
 
                     # Check for silence timeout
                     if last_voice_time is not None:
@@ -261,7 +273,7 @@ class VoiceListener:
                             break
 
                 if not recording_started and pre_roll_frames > 0:
-                    pre_roll.append(data)
+                    pre_roll.append(cleaned or data)
                     if len(pre_roll) > pre_roll_frames:
                         pre_roll.pop(0)
 
@@ -278,6 +290,16 @@ class VoiceListener:
         duration = len(audio_bytes) / (sample_rate * bytes_per_sample)
         self._last_record_end_time = time.monotonic()
         return audio_bytes, sample_rate, duration
+
+    def _apply_noise_gate(self, pcm_bytes: bytes, level: float) -> bytes:
+        if not pcm_bytes:
+            return pcm_bytes
+        if level >= self.noise_gate_threshold:
+            return pcm_bytes
+        try:
+            return audioop.mul(pcm_bytes, 2, self.noise_gate_attenuation)
+        except audioop.error:
+            return pcm_bytes
 
     async def _transcribe_worker(
         self, queue: asyncio.Queue[tuple[bytes, int, float] | None]
