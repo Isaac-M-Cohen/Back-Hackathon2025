@@ -45,6 +45,8 @@ voice_state: dict[str, Any] = {
     "final_transcript": "",
     "subjects": [],
     "audio_level": 0.0,
+    "error": "",
+    "phase": "idle",
     "updated_at": None,
 }
 
@@ -160,6 +162,17 @@ def update_settings(payload: dict[str, Any]):
         "log_command_debug",
         "microphone_device_index",
         "speaker_device_index",
+        # New WAV pipeline voice settings
+        "voice_silence_threshold",
+        "voice_silence_duration_secs",
+        "voice_min_record_duration_secs",
+        "voice_max_record_duration_secs",
+        "voice_send_to_executor",
+        "voice_min_voice_duration_secs",
+        "voice_pre_roll_secs",
+        "voice_min_gap_secs",
+        "voice_use_legacy_pause_threshold",
+        # Legacy voice settings (kept for backwards compatibility)
         "voice_pause_threshold_ms",
         "voice_live_transcribe_interval_ms",
         "voice_min_command_seconds",
@@ -550,25 +563,42 @@ def start_voice():
         return {"status": "ok", "running": True}
 
     settings = load_json("config/app_settings.json")
-    pause_threshold_secs = float(settings.get("voice_pause_threshold_ms", 1200)) / 1000.0
-    live_interval_secs = float(settings.get("voice_live_transcribe_interval_ms", 1200)) / 1000.0
-    min_command_seconds = float(settings.get("voice_min_command_seconds", 0.6))
-    audio_level_threshold = float(settings.get("voice_audio_level_threshold", 0.02))
-    partial_window_secs = float(settings.get("voice_partial_window_secs", 8.0))
+    # New WAV pipeline settings
+    silence_threshold = float(settings.get("voice_silence_threshold", 0.02))
+    silence_duration_secs = float(settings.get("voice_silence_duration_secs", 1.1))
+    min_record_duration_secs = float(settings.get("voice_min_record_duration_secs", 0.7))
+    max_record_duration_secs = float(settings.get("voice_max_record_duration_secs", 8.0))
+    min_voice_duration_secs = float(settings.get("voice_min_voice_duration_secs", 0.12))
+    pre_roll_secs = float(settings.get("voice_pre_roll_secs", 0.25))
+    min_gap_secs = float(settings.get("voice_min_gap_secs", 0.25))
+    send_to_executor = bool(settings.get("voice_send_to_executor", False))
+    # Legacy settings (only used if explicitly enabled)
+    use_legacy_pause = bool(settings.get("voice_use_legacy_pause_threshold", False))
+    audio_level_threshold = float(settings.get("voice_audio_level_threshold", silence_threshold))
+    pause_threshold_ms = settings.get("voice_pause_threshold_ms") if use_legacy_pause else None
+    pause_threshold_secs = float(pause_threshold_ms) / 1000.0 if pause_threshold_ms else None
+    min_command_seconds = float(settings.get("voice_min_command_seconds", min_record_duration_secs))
 
     def _handle_partial(text: str) -> None:
-        _update_voice_state(live_transcript=text)
+        _update_voice_state(live_transcript=text, error="")
 
     def _handle_final(text: str) -> None:
-        subjects = _extract_subjects(text)
+        subjects = _extract_subjects(text) if send_to_executor else []
         _update_voice_state(
             final_transcript=text,
             live_transcript=text,
             subjects=subjects,
+            error="",
         )
 
     def _handle_level(level: float) -> None:
         _update_voice_state(audio_level=level)
+
+    def _handle_error(message: str) -> None:
+        _update_voice_state(error=message, phase="error")
+
+    def _handle_state(state: str) -> None:
+        _update_voice_state(phase=state)
 
     voice_listener = VoiceListener(
         controller,
@@ -579,14 +609,24 @@ def start_voice():
         on_partial_transcript=_handle_partial,
         on_final_transcript=_handle_final,
         on_audio_level=_handle_level,
+        on_error=_handle_error,
+        on_state=_handle_state,
+        send_to_executor=send_to_executor,
+        # New WAV pipeline parameters
+        silence_threshold=silence_threshold,
+        silence_duration_secs=silence_duration_secs,
+        min_record_duration_secs=min_record_duration_secs,
+        max_record_duration_secs=max_record_duration_secs,
+        min_voice_duration_secs=min_voice_duration_secs,
+        pre_roll_secs=pre_roll_secs,
+        min_gap_secs=min_gap_secs,
+        # Legacy parameters (VoiceListener maps these internally)
         pause_threshold_secs=pause_threshold_secs,
-        live_transcribe_interval_secs=live_interval_secs,
         min_command_seconds=min_command_seconds,
         audio_level_threshold=audio_level_threshold,
-        partial_window_secs=partial_window_secs,
     )
     voice_listener.start()
-    _update_voice_state(running=True)
+    _update_voice_state(running=True, error="", phase="listening")
     return {"status": "ok", "running": True}
 
 
@@ -595,7 +635,7 @@ def stop_voice():
     global voice_listener
     if voice_listener:
         voice_listener.stop()
-    _update_voice_state(running=False, audio_level=0.0)
+    _update_voice_state(running=False, audio_level=0.0, phase="idle")
     return {"status": "ok", "running": False}
 
 
