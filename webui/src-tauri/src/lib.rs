@@ -14,6 +14,9 @@ use tauri::WindowEvent;
 #[derive(Clone)]
 struct BackendChild(Arc<Mutex<Option<Child>>>);
 
+#[derive(Clone)]
+struct ApiBase(String);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -35,8 +38,43 @@ pub fn run() {
       Menu::with_items(handle, &[&app_menu])
     })
     .on_menu_event(|app, event| {
+      let open_settings_window = |app: &tauri::AppHandle<Wry>| {
+        let api_base = app.state::<ApiBase>().0.clone();
+        if app.get_webview_window("settings").is_none() {
+          match tauri::WebviewWindowBuilder::new(
+            app,
+            "settings",
+            tauri::WebviewUrl::App("index.html?window=settings".into()),
+          )
+          .title("Settings")
+          .inner_size(900.0, 700.0)
+          .resizable(true)
+          .build()
+          {
+            Ok(window) => {
+              let script = format!(
+                "window.__EASY_API_BASE__ = \"{api_base}\"; \
+                 window.dispatchEvent(new CustomEvent('easy://api-base', {{ detail: \"{api_base}\" }}));"
+              );
+              let _ = window.eval(&script);
+              println!("[easy][tauri] settings window created");
+            }
+            Err(err) => println!("[easy][tauri] settings window error: {err}"),
+          }
+        } else if let Some(window) = app.get_webview_window("settings") {
+          let script = format!(
+            "window.__EASY_API_BASE__ = \"{api_base}\"; \
+             window.dispatchEvent(new CustomEvent('easy://api-base', {{ detail: \"{api_base}\" }}));"
+          );
+          let _ = window.eval(&script);
+          let _ = window.show();
+          let _ = window.set_focus();
+          println!("[easy][tauri] settings window focused");
+        }
+      };
       if event.id() == "preferences" {
-        let _ = app.emit("easy://open-settings", ());
+        println!("[easy][tauri] preferences menu clicked");
+        open_settings_window(app.app_handle());
       }
     })
     .setup(|app| {
@@ -50,14 +88,52 @@ pub fn run() {
 
       let (api_base, child) = spawn_backend(app)?;
       app.manage(BackendChild(Arc::new(Mutex::new(Some(child)))));
+      app.manage(ApiBase(api_base.clone()));
       app.emit("easy://api-base", api_base.clone())?;
 
       let app_handle = app.handle().clone();
       let app_handle_for_event = app_handle.clone();
       app_handle.listen("easy://frontend-ready", move |_| {
+        println!("[easy][tauri] frontend-ready received");
         if let Some(window) = app_handle_for_event.get_webview_window("main") {
           let _ = window.show();
           let _ = window.set_focus();
+        }
+      });
+
+      let app_handle_for_settings = app.handle().clone();
+      app_handle.listen("easy://open-settings-window", move |_| {
+        let api_base = app_handle_for_settings.state::<ApiBase>().0.clone();
+        if app_handle_for_settings.get_webview_window("settings").is_none() {
+          match tauri::WebviewWindowBuilder::new(
+            &app_handle_for_settings,
+            "settings",
+            tauri::WebviewUrl::App("index.html?window=settings".into()),
+          )
+          .title("Settings")
+          .inner_size(900.0, 700.0)
+          .resizable(true)
+          .build()
+          {
+            Ok(window) => {
+              let script = format!(
+                "window.__EASY_API_BASE__ = \"{api_base}\"; \
+                 window.dispatchEvent(new CustomEvent('easy://api-base', {{ detail: \"{api_base}\" }}));"
+              );
+              let _ = window.eval(&script);
+              println!("[easy][tauri] settings window created (event)");
+            }
+            Err(err) => println!("[easy][tauri] settings window error (event): {err}"),
+          }
+        } else if let Some(window) = app_handle_for_settings.get_webview_window("settings") {
+          let script = format!(
+            "window.__EASY_API_BASE__ = \"{api_base}\"; \
+             window.dispatchEvent(new CustomEvent('easy://api-base', {{ detail: \"{api_base}\" }}));"
+          );
+          let _ = window.eval(&script);
+          let _ = window.show();
+          let _ = window.set_focus();
+          println!("[easy][tauri] settings window focused (event)");
         }
       });
 

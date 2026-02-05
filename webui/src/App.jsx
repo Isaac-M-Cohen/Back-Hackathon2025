@@ -1,6 +1,37 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, MoreVertical, Trash2, Play, Pause, Settings, Camera, Mic } from "lucide-react";
 import { Api, initApiBase, waitForApiReady } from "./api";
+import SettingsModal from "./components/settings/SettingsModal";
+
+const defaultSettings = {
+  theme: "light",
+  ui_poll_interval_ms: 500,
+  recognition_stable_frames: 5,
+  recognition_emit_cooldown_ms: 200,
+  recognition_confidence_threshold: 0.6,
+  microphone_device_index: null,
+  speaker_device_index: null,
+};
+
+function buildSettingsDraft(next = {}) {
+  return {
+    theme: next.theme ?? defaultSettings.theme,
+    ui_poll_interval_ms:
+      next.ui_poll_interval_ms ?? defaultSettings.ui_poll_interval_ms,
+    recognition_stable_frames:
+      next.recognition_stable_frames ?? defaultSettings.recognition_stable_frames,
+    recognition_emit_cooldown_ms:
+      next.recognition_emit_cooldown_ms ??
+      defaultSettings.recognition_emit_cooldown_ms,
+    recognition_confidence_threshold:
+      next.recognition_confidence_threshold ??
+      defaultSettings.recognition_confidence_threshold,
+    microphone_device_index:
+      next.microphone_device_index ?? defaultSettings.microphone_device_index,
+    speaker_device_index:
+      next.speaker_device_index ?? defaultSettings.speaker_device_index,
+  };
+}
 
 function detectClientOs() {
   if (typeof navigator === "undefined") {
@@ -21,7 +52,19 @@ function detectClientOs() {
   return "Unknown";
 }
 
-export default function GestureControlApp() {
+export default function App() {
+  const isSettingsWindow = useMemo(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get("window") === "settings";
+  }, []);
+
+  return isSettingsWindow ? <SettingsWindow /> : <GestureControlApp />;
+}
+
+function GestureControlApp() {
   const [gestures, setGestures] = useState([]);
   const [allGestures, setAllGestures] = useState([]);
   const [presetGestures, setPresetGestures] = useState([]);
@@ -53,15 +96,8 @@ export default function GestureControlApp() {
   const [commandModal, setCommandModal] = useState(null);
   const [isSavingCommand, setIsSavingCommand] = useState(false);
   const [commandModalError, setCommandModalError] = useState("");
-  const defaultSettings = {
-    theme: "light",
-    ui_poll_interval_ms: 500,
-    recognition_stable_frames: 5,
-    recognition_emit_cooldown_ms: 200,
-    recognition_confidence_threshold: 0.6,
-    microphone_device_index: null,
-    speaker_device_index: null,
-  };
+  const settingsOpenRef = useRef(false);
+  const lastSettingsOpenAtRef = useRef(0);
 
   useEffect(() => {
     if (bootStartedRef.current) {
@@ -390,31 +426,42 @@ export default function GestureControlApp() {
     }
   };
 
-  const openSettings = useCallback(async () => {
+  const openSettings = useCallback(async (source = "unknown") => {
+    const now = Date.now();
+    if (now - lastSettingsOpenAtRef.current < 1000) {
+      console.log("[Settings] open throttled", {
+        source,
+        sinceMs: now - lastSettingsOpenAtRef.current,
+      });
+      return;
+    }
+    if (showSettings || settingsOpenRef.current) {
+      console.log("[Settings] open ignored", {
+        source,
+        showSettings,
+        inFlight: settingsOpenRef.current,
+      });
+      return;
+    }
+    lastSettingsOpenAtRef.current = now;
+    settingsOpenRef.current = true;
+    console.log("[Settings] open requested", { source });
+    console.trace("[Settings] open stack");
+    try {
+      const { emit } = await import("@tauri-apps/api/event");
+      await emit("easy://open-settings-window");
+      settingsOpenRef.current = false;
+      return;
+    } catch {
+      // Tauri APIs not available (web dev mode).
+    }
     try {
       const next = await Api.getSettings();
       setSettings(next);
-      setSettingsDraft({
-        theme: next.theme ?? defaultSettings.theme,
-        ui_poll_interval_ms:
-          next.ui_poll_interval_ms ?? defaultSettings.ui_poll_interval_ms,
-        recognition_stable_frames:
-          next.recognition_stable_frames ??
-          defaultSettings.recognition_stable_frames,
-        recognition_emit_cooldown_ms:
-          next.recognition_emit_cooldown_ms ??
-          defaultSettings.recognition_emit_cooldown_ms,
-        recognition_confidence_threshold:
-          next.recognition_confidence_threshold ??
-          defaultSettings.recognition_confidence_threshold,
-        microphone_device_index:
-          next.microphone_device_index ?? defaultSettings.microphone_device_index,
-        speaker_device_index:
-          next.speaker_device_index ?? defaultSettings.speaker_device_index,
-      });
+      setSettingsDraft(buildSettingsDraft(next));
     } catch (err) {
       setError(err.message);
-      setSettingsDraft({ ...defaultSettings });
+      setSettingsDraft(buildSettingsDraft());
     }
     try {
       const devices = await Api.listAudioDevices();
@@ -425,15 +472,21 @@ export default function GestureControlApp() {
     } catch {
       setAudioDevices({ inputs: [], outputs: [] });
     }
-    setShowSettings(true);
-  }, []);
+    setTimeout(() => {
+      setShowSettings(true);
+    }, 200);
+    settingsOpenRef.current = false;
+  }, [showSettings]);
 
   const closeSettings = () => {
+    console.log("[Settings] close requested");
+    console.trace("[Settings] close stack");
     setShowSettings(false);
     setSettingsDraft(null);
   };
 
   const saveSettings = async () => {
+    console.log("[Settings] save requested");
     if (!settingsDraft) {
       return;
     }
@@ -461,7 +514,8 @@ export default function GestureControlApp() {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen("easy://open-settings", () => {
-          openSettings();
+          console.log("[Settings] menu event received");
+          openSettings("menu");
         });
       } catch {
         // Tauri APIs not available (web dev mode).
@@ -474,43 +528,50 @@ export default function GestureControlApp() {
     };
   }, [openSettings]);
 
+  useEffect(() => {
+    console.log("[Settings] state", {
+      showSettings,
+      hasDraft: Boolean(settingsDraft),
+    });
+  }, [showSettings, settingsDraft]);
+
   if (isBooting) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm px-8 py-6 text-center">
-          <div className="text-lg font-medium text-gray-900 mb-2">Easy</div>
-          <div className="text-sm text-gray-600">{bootMessage}</div>
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <div className="bg-surface-elevated border border-line rounded-2xl shadow-sm px-8 py-6 text-center">
+          <div className="text-lg font-medium text-content-primary mb-2">Easy</div>
+          <div className="text-sm text-content-secondary">{bootMessage}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-surface-base flex items-center justify-center p-8">
       <div className="w-full max-w-2xl">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-light text-gray-800">Gesture Control</h1>
+          <h1 className="text-2xl font-light text-content-primary">Gesture Control</h1>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200 bg-white">
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-line bg-surface-elevated">
               <span
                 className={`h-2 w-2 rounded-full ${
-                  isGestureRunning ? "bg-green-500" : "bg-red-500"
+                  isGestureRunning ? "bg-status-active" : "bg-status-inactive"
                 }`}
               />
-              <Camera size={14} className="text-gray-600" />
-              <span className="text-[11px] text-gray-600">Camera</span>
+              <Camera size={14} className="text-content-secondary" />
+              <span className="text-[11px] text-content-secondary">Camera</span>
             </div>
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200 bg-white">
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-line bg-surface-elevated">
               <span
                 className={`h-2 w-2 rounded-full ${
-                  isVoiceRunning ? "bg-green-500" : "bg-red-500"
+                  isVoiceRunning ? "bg-status-active" : "bg-status-inactive"
                 }`}
               />
-              <Mic size={14} className="text-gray-600" />
-              <div className="w-10 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <Mic size={14} className="text-content-secondary" />
+              <div className="w-10 h-2 bg-surface-inset rounded-full overflow-hidden">
                 <div
                   className={`h-2 transition-all ${
-                    isVoiceRunning ? "bg-green-500" : "bg-gray-400"
+                    isVoiceRunning ? "bg-status-active" : "bg-content-tertiary"
                   }`}
                   style={{
                     width: `${Math.min(100, Math.max(0, (voiceStatus.audio_level || 0) * 100))}%`,
@@ -519,8 +580,12 @@ export default function GestureControlApp() {
               </div>
             </div>
             <button
-              onClick={openSettings}
-              className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-100"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openSettings("button");
+              }}
+              className="p-2 rounded-lg border border-line bg-surface-elevated text-content-secondary hover:text-content-primary hover:border-line hover:bg-surface-elevated-hover"
               aria-label="Settings"
               title="Settings"
             >
@@ -530,8 +595,8 @@ export default function GestureControlApp() {
               onClick={toggleGestureRecognition}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-sm ${
                 isGestureRunning
-                  ? "bg-green-500 text-white hover:bg-green-600"
-                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                  ? "bg-status-active text-white hover:bg-status-active-hover"
+                  : "bg-btn-secondary text-btn-secondary-text hover:bg-btn-secondary-hover"
               }`}
             >
               {isGestureRunning ? <Pause size={16} /> : <Play size={16} />}
@@ -541,8 +606,8 @@ export default function GestureControlApp() {
               onClick={toggleVoiceRecognition}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-sm ${
                 isVoiceRunning
-                  ? "bg-green-500 text-white hover:bg-green-600"
-                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                  ? "bg-status-active text-white hover:bg-status-active-hover"
+                  : "bg-btn-secondary text-btn-secondary-text hover:bg-btn-secondary-hover"
               }`}
             >
               {isVoiceRunning ? <Pause size={16} /> : <Play size={16} />}
@@ -552,13 +617,13 @@ export default function GestureControlApp() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">
+          <div className="mb-4 rounded-lg bg-status-error-bg border border-status-error-border text-status-error-text px-4 py-2 text-sm">
             {error}
           </div>
         )}
 
         {isGestureRunning && lastDetection && (
-          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm flex items-center justify-between">
+          <div className="mb-4 rounded-lg bg-status-success-bg border border-status-success-border text-status-success-text px-4 py-2 text-sm flex items-center justify-between">
             <span>
               Detected: <strong>{lastDetection.label}</strong>{" "}
               {lastDetection.confidence !== undefined &&
@@ -568,7 +633,7 @@ export default function GestureControlApp() {
         )}
 
         {isVoiceRunning && (
-          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2 text-sm">
+          <div className="mb-4 rounded-lg bg-status-info-bg border border-status-info-border text-status-info-text px-4 py-2 text-sm">
             <div className="flex items-center justify-between">
               <span>
                 Transcribed:{" "}
@@ -580,7 +645,7 @@ export default function GestureControlApp() {
               </span>
             </div>
             {Array.isArray(voiceStatus.subjects) && voiceStatus.subjects.length > 0 && (
-              <div className="mt-2 text-xs text-amber-800">
+              <div className="mt-2 text-xs opacity-80">
                 Subjects: {voiceStatus.subjects.join(", ")}
               </div>
             )}
@@ -588,24 +653,24 @@ export default function GestureControlApp() {
         )}
 
         {lastCommandMeta && (
-          <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 px-4 py-2 text-sm flex items-center justify-between">
+          <div className="mb-4 rounded-lg bg-surface-inset border border-accent text-content-primary px-4 py-2 text-sm flex items-center justify-between">
             <span>
               Last command: <strong>{lastCommandMeta.status}</strong>{" "}
               {lastCommandMeta.stepCount > 0 && `(${lastCommandMeta.stepCount} steps)`}
               {lastCommandMeta.reason && ` — ${lastCommandMeta.reason}`}
             </span>
             {lastCommandMeta.timestamp && (
-              <span className="text-xs text-blue-700">
+              <span className="text-xs text-content-secondary">
                 {lastCommandMeta.timestamp.toLocaleTimeString()}
               </span>
             )}
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-surface-elevated rounded-2xl shadow-sm border border-line overflow-hidden">
           {gestures.length === 0 ? (
             <div className="p-16 text-center">
-              <div className="text-gray-400 mb-4">
+              <div className="text-content-tertiary mb-4">
                 <svg
                   className="w-16 h-16 mx-auto"
                   fill="none"
@@ -620,48 +685,48 @@ export default function GestureControlApp() {
                   />
                 </svg>
               </div>
-              <p className="text-gray-500 text-sm font-light">No gestures tracked yet</p>
+              <p className="text-content-secondary text-sm font-light">No gestures tracked yet</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-line-divider">
               {gestures.map((item) => (
                 <div
                   key={item.id}
                   className={`flex items-center px-6 py-4 transition-colors ${
-                    hoveredId === item.id ? "bg-gray-100" : ""
+                    hoveredId === item.id ? "bg-surface-inset" : ""
                   }`}
                   onMouseEnter={() => setHoveredId(item.id)}
                   onMouseLeave={() => setHoveredId(null)}
                 >
-                  <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-20 h-20 bg-surface-input rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
                     {hoveredId === item.id ? (
-                      <div className="text-xs text-gray-500 animate-pulse">
+                      <div className="text-xs text-content-secondary animate-pulse">
                         {item.gesture.name}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-content-tertiary">
                         {item.gesture.name.split(" ")[0]}
                       </div>
                     )}
                   </div>
 
                   <div className="flex-1">
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-inset rounded-lg">
                       {(item.hotkey || "Unset")
                         .split("+")
                         .filter(Boolean)
                         .map((key, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span className="text-gray-400 text-xs">+</span>}
-                            <kbd className="text-sm font-medium text-gray-700">{key}</kbd>
+                            {i > 0 && <span className="text-content-tertiary text-xs">+</span>}
+                            <kbd className="text-sm font-medium text-content-primary">{key}</kbd>
                           </React.Fragment>
                         ))}
                     </div>
-                    <div className="mt-3 text-xs text-gray-500">
+                    <div className="mt-3 text-xs text-content-secondary">
                       <span className="uppercase tracking-wide text-[10px]">
                         Command
                       </span>
-                      <div className="mt-1 text-sm text-gray-700">
+                      <div className="mt-1 text-sm text-content-primary">
                         {item.command || "No command set"}
                       </div>
                     </div>
@@ -670,16 +735,16 @@ export default function GestureControlApp() {
                   <div className="relative">
                     <button
                       onClick={() => setMenuOpen(menuOpen === item.id ? null : item.id)}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                      className="p-2 hover:bg-surface-input rounded-lg transition-colors"
                     >
-                      <MoreVertical size={18} className="text-gray-500" />
+                      <MoreVertical size={18} className="text-content-secondary" />
                     </button>
 
                     {menuOpen === item.id && (
-                      <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                      <div className="absolute right-0 mt-2 w-40 bg-surface-elevated rounded-lg shadow-lg border border-line py-1 z-10">
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          className="w-full px-4 py-2 text-left text-sm text-status-error-text hover:bg-status-error-bg flex items-center gap-2"
                         >
                           <Trash2 size={14} />
                           Delete
@@ -689,7 +754,7 @@ export default function GestureControlApp() {
                             setMenuOpen(null);
                             openCommandModal(item.gesture, "edit");
                           }}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                          className="w-full px-4 py-2 text-left text-sm text-content-primary hover:bg-surface-inset-hover flex items-center gap-2"
                         >
                           Edit
                         </button>
@@ -703,7 +768,7 @@ export default function GestureControlApp() {
 
           <button
             onClick={handleAddGesture}
-            className="w-full p-4 flex items-center justify-center gap-2 text-gray-500 hover:bg-gray-100 transition-colors border-t border-gray-100"
+            className="w-full p-4 flex items-center justify-center gap-2 text-content-secondary hover:bg-surface-inset transition-colors border-t border-line-divider"
           >
             <Plus size={20} />
             <span className="text-sm font-medium">Add Gesture</span>
@@ -744,12 +809,13 @@ export default function GestureControlApp() {
 
       {showSettings && settingsDraft && (
         <SettingsModal
+          isOpen={showSettings}
           values={settingsDraft}
           onChange={setSettingsDraft}
           onSave={saveSettings}
           onClose={closeSettings}
+          onReset={() => setSettingsDraft({ ...defaultSettings })}
           audioDevices={audioDevices}
-          defaultValues={defaultSettings}
         />
       )}
 
@@ -772,30 +838,151 @@ export default function GestureControlApp() {
   );
 }
 
+function SettingsWindow() {
+  const [settingsDraft, setSettingsDraft] = useState(null);
+  const [audioDevices, setAudioDevices] = useState({ inputs: [], outputs: [] });
+  const [error, setError] = useState("");
+  const [themeMode, setThemeMode] = useState(defaultSettings.theme);
+
+  useEffect(() => {
+    let cancelled = false;
+    initApiBase().then(async () => {
+      try {
+        const next = await Api.getSettings();
+        if (cancelled) {
+          return;
+        }
+        setSettingsDraft(buildSettingsDraft(next));
+        if (next.theme) {
+          setThemeMode(next.theme);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load settings.");
+          setSettingsDraft(buildSettingsDraft());
+        }
+      }
+      try {
+        const devices = await Api.listAudioDevices();
+        if (!cancelled) {
+          setAudioDevices({
+            inputs: devices.inputs || [],
+            outputs: devices.outputs || [],
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setAudioDevices({ inputs: [], outputs: [] });
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const isDark = themeMode === "dark" || (themeMode === "system" && media.matches);
+      document.documentElement.classList.toggle("dark", isDark);
+    };
+    applyTheme();
+    if (media.addEventListener) {
+      media.addEventListener("change", applyTheme);
+      return () => media.removeEventListener("change", applyTheme);
+    }
+    media.addListener(applyTheme);
+    return () => media.removeListener(applyTheme);
+  }, [themeMode]);
+
+  const closeSettings = useCallback(async () => {
+    try {
+      const { getCurrentWebviewWindow } = await import(
+        "@tauri-apps/api/webviewWindow"
+      );
+      const win = getCurrentWebviewWindow();
+      await win.close();
+    } catch {
+      if (typeof window !== "undefined") {
+        window.close();
+      }
+    }
+  }, []);
+
+  const saveSettings = async () => {
+    if (!settingsDraft) {
+      return;
+    }
+    try {
+      const res = await Api.updateSettings(settingsDraft);
+      if (res && res.settings) {
+        setSettingsDraft(buildSettingsDraft(res.settings));
+        if (res.settings.theme) {
+          setThemeMode(res.settings.theme);
+        }
+      }
+    } catch (err) {
+      setError(err.message || "Failed to save settings.");
+    }
+  };
+
+  if (!settingsDraft) {
+    return (
+      <div className="min-h-screen bg-surface-base p-6 text-content-secondary">
+        Loading settings...
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-surface-base">
+      {error && (
+        <div className="mx-auto max-w-4xl pt-6 px-6 text-sm text-status-error-text">
+          {error}
+        </div>
+      )}
+      <SettingsModal
+        variant="window"
+        isOpen
+        values={settingsDraft}
+        onChange={setSettingsDraft}
+        onSave={saveSettings}
+        onClose={closeSettings}
+        onReset={() => setSettingsDraft(buildSettingsDraft())}
+        audioDevices={audioDevices}
+      />
+    </div>
+  );
+}
+
 function PresetModal({ presets, onSelect, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-8 z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-light mb-6">Choose a Gesture</h2>
+      <div className="bg-surface-elevated rounded-2xl shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-light mb-6 text-content-primary">Choose a Gesture</h2>
         <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
           {presets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onSelect(preset)}
-              className="p-4 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all text-left"
+              className="p-4 border border-line rounded-lg hover:border-line-strong hover:bg-surface-inset-hover transition-all text-left"
             >
-              <div className="w-full h-16 bg-gray-200 rounded mb-2 flex items-center justify-center">
-                <span className="text-xs text-gray-500">
+              <div className="w-full h-16 bg-surface-input rounded mb-2 flex items-center justify-center">
+                <span className="text-xs text-content-secondary">
                   {preset.name.split(" ")[0]}
                 </span>
               </div>
-              <p className="text-sm text-gray-700">{preset.name}</p>
+              <p className="text-sm text-content-primary">{preset.name}</p>
             </button>
           ))}
         </div>
         <button
           onClick={onClose}
-          className="mt-6 w-full py-2 text-sm text-gray-600 hover:text-gray-800"
+          className="mt-6 w-full py-2 text-sm text-content-secondary hover:text-content-primary"
         >
           Cancel
         </button>
@@ -822,34 +1009,34 @@ function CommandModal({
   const title = mode === "edit" ? "Edit Command" : "Add Command";
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-8 z-50">
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-light mb-2">{title}</h2>
+      <div className="relative bg-surface-elevated rounded-2xl shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-light mb-2 text-content-primary">{title}</h2>
         {gesture && (
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-content-secondary mb-4">
             {mode === "edit" ? "Update" : "Add"}{" "}
             <span className="font-medium">{gesture.name}</span> command
           </p>
         )}
-        <label className="text-xs text-gray-500 block mb-2">
+        <label className="text-xs text-content-secondary block mb-2">
           Command
         </label>
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="w-full border border-line rounded-lg px-3 py-2 text-sm text-content-primary bg-surface-input focus:outline-none focus:ring-2 focus:ring-accent"
           placeholder="Describe the action to run"
           disabled={isSaving}
         />
         {error && (
-          <div className="mt-3 text-sm text-red-600">
+          <div className="mt-3 text-sm text-status-error-text">
             {error}
           </div>
         )}
         <div className="mt-6 flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            className="flex-1 py-2 px-4 bg-btn-secondary text-btn-secondary-text rounded-lg hover:bg-btn-secondary-hover transition-colors"
             disabled={isSaving}
           >
             Cancel
@@ -858,8 +1045,8 @@ function CommandModal({
             onClick={onConfirm}
             className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
               isDisabled
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-blue-500 text-white hover:bg-blue-600"
+                ? "bg-btn-secondary text-content-tertiary cursor-not-allowed"
+                : "bg-accent text-content-onaccent hover:bg-accent-hover"
             }`}
             disabled={isDisabled}
           >
@@ -867,8 +1054,8 @@ function CommandModal({
           </button>
         </div>
         {isSaving && (
-          <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
-            <div className="text-sm text-gray-600">
+          <div className="absolute inset-0 bg-surface-elevated/80 flex items-center justify-center rounded-2xl">
+            <div className="text-sm text-content-secondary">
               Interpreting command...
             </div>
           </div>
@@ -878,117 +1065,19 @@ function CommandModal({
   );
 }
 
-function SettingsModal({
-  values,
-  onChange,
-  onSave,
-  onClose,
-  audioDevices,
-  defaultValues,
-}) {
-  const isDark = values.theme === "dark";
-  const micValue = values.microphone_device_index ?? "";
-  const speakerValue = values.speaker_device_index ?? "";
-  const inputDevices = audioDevices?.inputs || [];
-  const outputDevices = audioDevices?.outputs || [];
-  return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-6 z-50">
-      <div className="bg-surface-elevated rounded-2xl shadow-lg border border-line w-full max-w-md p-6">
-        <h2 className="text-lg font-medium text-content-primary mb-4">Settings</h2>
-        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4">
-          <div className="flex items-center justify-between text-sm text-content-secondary">
-            <span>Dark mode</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isDark}
-              onClick={() =>
-                onChange({ ...values, theme: isDark ? "light" : "dark" })
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isDark ? "bg-toggle-on" : "bg-toggle-off"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-toggle-knob transition-transform ${
-                  isDark ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-          <div className="rounded-xl border border-line bg-surface-inset p-3 space-y-4">
-            <p className="text-xs font-medium text-content-tertiary uppercase tracking-wide">
-              Audio I/O
-            </p>
-            <div className="space-y-3">
-              <DeviceSelectSegmented
-                label="Microphone input"
-                value={micValue}
-                devices={inputDevices}
-                onChange={(value) =>
-                  onChange({
-                    ...values,
-                    microphone_device_index: value,
-                  })
-                }
-              />
-              <DeviceSelectSegmented
-                label="Speaker output"
-                value={speakerValue}
-                devices={outputDevices}
-                onChange={(value) =>
-                  onChange({
-                    ...values,
-                    speaker_device_index: value,
-                  })
-                }
-              />
-            </div>
-          </div>
-          <div className="rounded-xl border border-line bg-surface-inset p-3 space-y-4">
-            <p className="text-xs font-medium text-content-tertiary uppercase tracking-wide">
-              Value Settings
-            </p>
-            <ValueSettingsPresets values={values} onChange={onChange} />
-          </div>
-        </div>
-        <div className="mt-6 flex items-center justify-end gap-3">
-            <button
-              onClick={() => onChange({ ...defaultValues })}
-              className="px-4 py-2 text-sm rounded-lg bg-btn-tertiary text-btn-tertiary-text hover:bg-btn-tertiary-hover transition-colors"
-            >
-              Reset to defaults
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg bg-btn-secondary text-btn-secondary-text hover:bg-btn-secondary-hover transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSave}
-              className="px-4 py-2 text-sm rounded-lg bg-accent text-content-onaccent hover:bg-accent-hover transition-colors"
-            >
-              Save
-            </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function CommandConfirmModal({ item, onApprove, onDeny }) {
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-2">
+      <div className="bg-surface-elevated rounded-2xl shadow-lg border border-line w-full max-w-md p-6">
+        <h2 className="text-lg font-medium text-content-primary mb-2">
           Confirm Command
         </h2>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-content-secondary mb-4">
           {item.reason || "This command needs confirmation before running."}
         </p>
-        <div className="bg-gray-100 rounded-lg p-3 text-sm text-gray-700 mb-4">
-          <div className="text-xs text-gray-500 mb-1">
+        <div className="bg-surface-inset rounded-lg p-3 text-sm text-content-primary mb-4">
+          <div className="text-xs text-content-secondary mb-1">
             Source: {item.source}
           </div>
           <div className="font-medium">{item.text}</div>
@@ -996,13 +1085,13 @@ function CommandConfirmModal({ item, onApprove, onDeny }) {
         <div className="flex gap-3">
           <button
             onClick={onDeny}
-            className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            className="flex-1 py-2 px-4 bg-btn-secondary text-btn-secondary-text rounded-lg hover:bg-btn-secondary-hover transition-colors"
           >
             Deny
           </button>
           <button
             onClick={onApprove}
-            className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            className="flex-1 py-2 px-4 bg-accent text-content-onaccent rounded-lg hover:bg-accent-hover transition-colors"
           >
             Approve
           </button>
@@ -1010,212 +1099,4 @@ function CommandConfirmModal({ item, onApprove, onDeny }) {
       </div>
     </div>
   );
-}
-
-function DeviceSelectSegmented({ label, value, devices, onChange }) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [mode, setMode] = useState(
-    value === "" || value === null ? "default" : "pick"
-  );
-  const isDefault = value === "" || value === null;
-  const selected = devices.find((device) => device.index === value);
-  useEffect(() => {
-    setMode(isDefault ? "default" : "pick");
-    if (isDefault) {
-      setShowPicker(false);
-    }
-  }, [isDefault]);
-  return (
-    <div>
-      <label className="block text-sm text-gray-700">{label}</label>
-      <div className="mt-1 rounded-lg border border-gray-300 bg-gray-100 p-2 text-sm">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("default");
-              setShowPicker(false);
-              onChange(null);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              mode === "default"
-                ? "bg-gray-800 text-white"
-                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-            }`}
-          >
-            Default
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("pick");
-              setShowPicker(true);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              mode === "pick"
-                ? "bg-gray-800 text-white"
-                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-            }`}
-          >
-            Pick device
-          </button>
-          <span className="text-xs text-gray-500">
-            {selected ? selected.name : "System default"}
-          </span>
-        </div>
-        {(showPicker || mode === "pick") && (
-          <div className="mt-2 max-h-28 overflow-y-auto grid grid-cols-1 gap-1">
-            {devices.map((device) => (
-              <button
-                key={device.index}
-                type="button"
-                onClick={() => {
-                  onChange(Number(device.index));
-                  setShowPicker(false);
-                  setMode("pick");
-                }}
-                className={`w-full text-left px-2 py-1 rounded-md text-xs transition-colors ${
-                  device.index === value
-                    ? "bg-gray-300 text-gray-800"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-              >
-                {device.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ValueSettingsPresets({ values, onChange }) {
-  const presets = [
-    {
-      key: "ui_poll_interval_ms",
-      label: "UI poll interval",
-      unit: "ms",
-      min: 100,
-      max: 2000,
-      step: 50,
-      values: [
-        { label: "Fast", value: 250 },
-        { label: "Normal", value: 500 },
-        { label: "Relaxed", value: 1000 },
-      ],
-    },
-    {
-      key: "recognition_stable_frames",
-      label: "Stable frames",
-      unit: "frames",
-      min: 1,
-      max: 30,
-      step: 1,
-      values: [
-        { label: "Low", value: 3 },
-        { label: "Normal", value: 5 },
-        { label: "High", value: 8 },
-      ],
-    },
-    {
-      key: "recognition_emit_cooldown_ms",
-      label: "Emit cooldown",
-      unit: "ms",
-      min: 0,
-      max: 2000,
-      step: 50,
-      values: [
-        { label: "Short", value: 100 },
-        { label: "Normal", value: 200 },
-        { label: "Long", value: 500 },
-      ],
-    },
-    {
-      key: "recognition_confidence_threshold",
-      label: "Confidence threshold",
-      unit: "",
-      min: 0,
-      max: 1,
-      step: 0.05,
-      values: [
-        { label: "Loose", value: 0.4 },
-        { label: "Normal", value: 0.6 },
-        { label: "Strict", value: 0.8 },
-      ],
-    },
-  ];
-  return (
-    <div>
-      <div className="space-y-3">
-        {presets.map((preset) => (
-          <div key={preset.key} className="rounded-lg border border-gray-300 bg-gray-50 p-2">
-            <div className="flex items-center justify-between text-xs text-gray-700">
-              <span>{preset.label}</span>
-              <span>
-                {values[preset.key]} {preset.unit}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {preset.values.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() =>
-                    onChange({ ...values, [preset.key]: option.value })
-                  }
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    values[preset.key] === option.value
-                      ? "bg-gray-800 text-white"
-                      : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="ml-auto flex items-center gap-2 rounded-full border border-gray-300 bg-gray-100 px-2 py-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      ...values,
-                      [preset.key]: stepValue(preset, values[preset.key], -1),
-                    })
-                  }
-                  className="h-6 w-6 rounded-full bg-gray-300 text-gray-800 text-xs hover:bg-gray-400 transition-colors"
-                >
-                  -
-                </button>
-                <span className="min-w-[52px] text-center text-xs text-gray-700">
-                  {values[preset.key]} {preset.unit}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      ...values,
-                      [preset.key]: stepValue(preset, values[preset.key], 1),
-                    })
-                  }
-                  className="h-6 w-6 rounded-full bg-gray-300 text-gray-800 text-xs hover:bg-gray-400 transition-colors"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function stepValue(preset, current, direction) {
-  const min = preset.min ?? 0;
-  const max = preset.max ?? 1;
-  const step = preset.step ?? 1;
-  const next = Math.min(max, Math.max(min, Number(current) + direction * step));
-  return Number(next.toFixed(2));
 }

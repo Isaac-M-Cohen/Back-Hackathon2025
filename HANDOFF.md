@@ -5,6 +5,8 @@
 ## Summary
 All agents have completed their work on the executor rework. The workflow orchestrator has created a comprehensive operational runbook (RUNBOOK.md) that consolidates all findings, provides step-by-step deployment instructions, documents critical security fixes, and includes troubleshooting guides. The system is ready for deployment after applying 5 critical fixes (estimated 4-6 hours). The implementation demonstrates excellent architecture with 92.9% test coverage (79/85 passing), comprehensive documentation (~3300 lines), and clear remediation path.
 
+Recent UI note: settings now open in a dedicated Tauri window created in Rust. The fix was to emit `easy://open-settings-window` from the frontend and create/focus the window in `webui/src-tauri/src/lib.rs`, while injecting `window.__EASY_API_BASE__` into the settings window so it can reach the backend API.
+
 ---
 
 ## Project Completion Summary
