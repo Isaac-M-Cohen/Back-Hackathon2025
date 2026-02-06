@@ -4,6 +4,7 @@
 .env.dev
 .env.prod
 env/
+env/.env
 
 # Python
 __pycache__/

@@ -118,6 +118,11 @@ function GestureControlApp() {
           setSettings(settings);
           if (settings.theme) {
             setThemeMode(settings.theme);
+            try {
+              window.localStorage.setItem("easy-theme", settings.theme);
+            } catch {
+              // Ignore storage failures.
+            }
           }
           if (typeof settings.enable_commands === "boolean") {
             enableCommands = settings.enable_commands;
@@ -183,6 +188,33 @@ function GestureControlApp() {
     media.addListener(applyTheme);
     return () => media.removeListener(applyTheme);
   }, [themeMode]);
+
+  useEffect(() => {
+    let unlisten;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("easy://theme-changed", (event) => {
+          const next = event?.payload?.theme;
+          if (typeof next === "string") {
+            setThemeMode(next);
+            try {
+              window.localStorage.setItem("easy-theme", next);
+            } catch {
+              // Ignore storage failures.
+            }
+          }
+        });
+      } catch {
+        // Tauri APIs not available (web dev mode).
+      }
+    })();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -500,6 +532,17 @@ function GestureControlApp() {
         }
         if (res.settings.theme) {
           setThemeMode(res.settings.theme);
+          try {
+            const { emit } = await import("@tauri-apps/api/event");
+            await emit("easy://theme-changed", { theme: res.settings.theme });
+          } catch {
+            // Tauri APIs not available (web dev mode).
+          }
+          try {
+            window.localStorage.setItem("easy-theme", res.settings.theme);
+          } catch {
+            // Ignore storage failures.
+          }
         }
       }
       closeSettings();
@@ -537,17 +580,21 @@ function GestureControlApp() {
 
   if (isBooting) {
     return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
-        <div className="bg-surface-elevated border border-line rounded-2xl shadow-sm px-8 py-6 text-center">
-          <div className="text-lg font-medium text-content-primary mb-2">Easy</div>
-          <div className="text-sm text-content-secondary">{bootMessage}</div>
+      <div className="min-h-screen bg-surface-base flex flex-col">
+        <div className="h-7 w-full flex-shrink-0" data-tauri-drag-region />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="bg-surface-elevated border border-line rounded-2xl shadow-sm px-8 py-6 text-center">
+            <div className="text-sm text-content-secondary">{bootMessage}</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-base flex items-center justify-center p-8">
+    <div className="min-h-screen bg-surface-base flex flex-col">
+      <div className="h-7 w-full flex-shrink-0" data-tauri-drag-region />
+      <div className="flex-1 flex items-center justify-center p-8">
       <div className="w-full max-w-2xl">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-light text-content-primary">Gesture Control</h1>
@@ -834,6 +881,7 @@ function GestureControlApp() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -855,6 +903,11 @@ function SettingsWindow() {
         setSettingsDraft(buildSettingsDraft(next));
         if (next.theme) {
           setThemeMode(next.theme);
+          try {
+            window.localStorage.setItem("easy-theme", next.theme);
+          } catch {
+            // Ignore storage failures.
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -899,6 +952,33 @@ function SettingsWindow() {
     return () => media.removeListener(applyTheme);
   }, [themeMode]);
 
+  useEffect(() => {
+    let unlisten;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("easy://theme-changed", (event) => {
+          const next = event?.payload?.theme;
+          if (typeof next === "string") {
+            setThemeMode(next);
+            try {
+              window.localStorage.setItem("easy-theme", next);
+            } catch {
+              // Ignore storage failures.
+            }
+          }
+        });
+      } catch {
+        // Tauri APIs not available (web dev mode).
+      }
+    })();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
   const closeSettings = useCallback(async () => {
     try {
       const { getCurrentWebviewWindow } = await import(
@@ -923,8 +1003,20 @@ function SettingsWindow() {
         setSettingsDraft(buildSettingsDraft(res.settings));
         if (res.settings.theme) {
           setThemeMode(res.settings.theme);
+          try {
+            const { emit } = await import("@tauri-apps/api/event");
+            await emit("easy://theme-changed", { theme: res.settings.theme });
+          } catch {
+            // Tauri APIs not available (web dev mode).
+          }
+          try {
+            window.localStorage.setItem("easy-theme", res.settings.theme);
+          } catch {
+            // Ignore storage failures.
+          }
         }
       }
+      closeSettings();
     } catch (err) {
       setError(err.message || "Failed to save settings.");
     }
@@ -932,14 +1024,16 @@ function SettingsWindow() {
 
   if (!settingsDraft) {
     return (
-      <div className="h-screen bg-surface-base p-6 text-content-secondary overflow-hidden">
+      <div className="h-screen bg-surface-elevated p-6 text-content-secondary overflow-hidden">
+        <div className="h-7 w-full" data-tauri-drag-region />
         Loading settings...
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
+    <div className="h-screen bg-surface-elevated flex flex-col overflow-hidden">
+      <div className="h-7 w-full flex-shrink-0" data-tauri-drag-region />
       {error && (
         <div className="px-6 pt-4 text-sm text-status-error-text">
           {error}

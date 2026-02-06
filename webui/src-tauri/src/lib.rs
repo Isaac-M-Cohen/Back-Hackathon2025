@@ -47,8 +47,10 @@ pub fn run() {
             tauri::WebviewUrl::App("index.html?window=settings".into()),
           )
           .title("Settings")
-          .inner_size(900.0, 700.0)
-          .resizable(true)
+          .inner_size(500.0, 370.0)
+          .resizable(false)
+          .title_bar_style(tauri::TitleBarStyle::Overlay)
+          .hidden_title(true)
           .build()
           {
             Ok(window) => {
@@ -111,8 +113,10 @@ pub fn run() {
             tauri::WebviewUrl::App("index.html?window=settings".into()),
           )
           .title("Settings")
-          .inner_size(900.0, 700.0)
-          .resizable(true)
+          .inner_size(500.0, 370.0)
+          .resizable(false)
+          .title_bar_style(tauri::TitleBarStyle::Overlay)
+          .hidden_title(true)
           .build()
           {
             Ok(window) => {
@@ -149,7 +153,15 @@ pub fn run() {
     })
     .on_window_event(|window, event| {
       if let WindowEvent::CloseRequested { .. } = event {
-        shutdown_backend(window.app_handle());
+        if window.label() == "main" {
+          let app_handle = window.app_handle();
+          for (label, other) in app_handle.webview_windows() {
+            if label != "main" {
+              let _ = other.close();
+            }
+          }
+          shutdown_backend(app_handle);
+        }
       }
     })
     .run(tauri::generate_context!())
