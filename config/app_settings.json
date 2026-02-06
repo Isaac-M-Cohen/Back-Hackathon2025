@@ -1,6 +1,6 @@
 {
   "app_name": "easy",
-  "theme": "light",
+  "theme": "dark",
   "language": "en",
   "log_level": "DEEP",
   "log_level_comment": "Levels: ERROR, WARN, INFO, DEBUG, DEEP (most verbose).",

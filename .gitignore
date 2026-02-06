@@ -4,6 +4,7 @@
 .env.dev
 .env.prod
 env/
+env/.env
 
 # Python
 __pycache__/
@@ -28,6 +29,8 @@ dist/
 .DS_Store
 .idea/
 .idea/workspace.xml
+.claude/skills/
+voice_module/
 .vscode/
 
 # Misc

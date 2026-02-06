@@ -317,19 +317,25 @@ class TestURLResolver:
 
         # Mock links
         link1 = MagicMock()
-        link1.get_attribute.return_value = "https://example.com/cats"
+        link1.get_attribute.side_effect = lambda attr: {
+            "href": "https://example.com/cats",
+            "aria-label": None,
+        }.get(attr)
         link1.inner_text.return_value = "cat videos"
 
         link2 = MagicMock()
-        link2.get_attribute.return_value = "https://example.com/dogs"
+        link2.get_attribute.side_effect = lambda attr: {
+            "href": "https://example.com/dogs",
+            "aria-label": None,
+        }.get(attr)
         link2.inner_text.return_value = "dog videos"
 
         locator = MagicMock()
         locator.all.return_value = [link1, link2]
         page.locator.return_value = locator
 
-        # Mock URL resolution
-        page.evaluate.side_effect = lambda script, href: f"https://example.com{href}"
+        # Mock page.url for urljoin (Issue 3 fix)
+        type(page).url = PropertyMock(return_value="https://example.com")
 
         candidates = resolver._search_dom_for_links(page, "cat")
 
@@ -344,22 +350,32 @@ class TestURLResolver:
 
         # Mock links with invalid hrefs
         link1 = MagicMock()
-        link1.get_attribute.return_value = "#"  # Fragment link
+        link1.get_attribute.side_effect = lambda attr: {
+            "href": "#",  # Fragment link
+            "aria-label": None,
+        }.get(attr)
         link1.inner_text.return_value = "test"
 
         link2 = MagicMock()
-        link2.get_attribute.return_value = "javascript:void(0)"  # JavaScript link
+        link2.get_attribute.side_effect = lambda attr: {
+            "href": "javascript:void(0)",  # JavaScript link
+            "aria-label": None,
+        }.get(attr)
         link2.inner_text.return_value = "test"
 
         link3 = MagicMock()
-        link3.get_attribute.return_value = "https://example.com/valid"
+        link3.get_attribute.side_effect = lambda attr: {
+            "href": "https://example.com/valid",
+            "aria-label": None,
+        }.get(attr)
         link3.inner_text.return_value = "test"
 
         locator = MagicMock()
         locator.all.return_value = [link1, link2, link3]
         page.locator.return_value = locator
 
-        page.evaluate.return_value = "https://example.com/valid"
+        # Mock page.url for urljoin (Issue 3 fix)
+        type(page).url = PropertyMock(return_value="https://example.com")
 
         candidates = resolver._search_dom_for_links(page, "test")
 
@@ -392,7 +408,8 @@ class TestURLResolver:
         locator.all.return_value = [link1, link2]
         page.locator.return_value = locator
 
-        page.evaluate.return_value = "https://example.com/2"
+        # Mock page.url for urljoin (Issue 3 fix)
+        type(page).url = PropertyMock(return_value="https://example.com")
 
         candidates = resolver._search_dom_for_links(page, "test")
 
@@ -419,7 +436,8 @@ class TestURLResolver:
         locator.all.return_value = links
         page.locator.return_value = locator
 
-        page.evaluate.side_effect = lambda script, href: f"https://example.com{href}"
+        # Mock page.url for urljoin (Issue 3 fix)
+        type(page).url = PropertyMock(return_value="https://example.com")
 
         candidates = resolver._search_dom_for_links(page, "test")
 
@@ -487,9 +505,83 @@ class TestURLResolver:
         locator.all.return_value = links
         page.locator.return_value = locator
 
-        page.evaluate.side_effect = lambda script, href: f"https://example.com{href}"
+        # Mock page.url for urljoin (Issue 3 fix)
+        type(page).url = PropertyMock(return_value="https://example.com")
 
         candidates = resolver._search_dom_for_links(page, "test")
 
         # First link should have higher position score
         assert candidates[0].position_score > candidates[-1].position_score
+
+    # -----------------------------------------------------------------
+    # Issue 4 - Cache Hit Indicator Tests
+    # -----------------------------------------------------------------
+
+    def test_cache_hit_marks_from_cache_true(self, mock_playwright):
+        """Test that cache hits set from_cache=True."""
+        resolver = URLResolver()
+        page = mock_playwright["page"]
+
+        # First resolution (cache miss)
+        page.locator.return_value.all.return_value = []
+        result1 = resolver.resolve("test query")
+        assert result1.from_cache is False
+
+        # Second resolution (cache hit)
+        result2 = resolver.resolve("test query")
+        assert result2.from_cache is True
+
+    def test_fresh_resolution_has_from_cache_false(self, mock_playwright):
+        """Test that fresh resolutions have from_cache=False."""
+        resolver = URLResolver()
+        page = mock_playwright["page"]
+
+        page.locator.return_value.all.return_value = []
+        result = resolver.resolve("unique query")
+
+        assert result.from_cache is False
+
+    # -----------------------------------------------------------------
+    # Issue 2 - Thread Safety Tests
+    # -----------------------------------------------------------------
+
+    def test_resolver_has_page_lock(self, mock_playwright):
+        """Test that URLResolver has a page lock for thread safety."""
+        resolver = URLResolver()
+        assert hasattr(resolver, "_page_lock")
+        # Verify it's a threading Lock
+        from threading import Lock
+        assert isinstance(resolver._page_lock, type(Lock()))
+
+    # -----------------------------------------------------------------
+    # Issue 3 - URL Resolution via urljoin Tests
+    # -----------------------------------------------------------------
+
+    def test_dom_search_uses_urljoin_not_evaluate(self, mock_playwright):
+        """Test that DOM search uses Python urljoin, not page.evaluate."""
+        resolver = URLResolver()
+        page = mock_playwright["page"]
+
+        # Mock a link with relative href
+        link = MagicMock()
+        link.get_attribute.side_effect = lambda attr: {
+            "href": "/relative/path",
+            "aria-label": None,
+        }.get(attr)
+        link.inner_text.return_value = "test link"
+
+        locator = MagicMock()
+        locator.all.return_value = [link]
+        page.locator.return_value = locator
+
+        # Set page URL for urljoin base
+        type(page).url = PropertyMock(return_value="https://example.com/page")
+
+        candidates = resolver._search_dom_for_links(page, "test")
+
+        # Should resolve relative URL using urljoin
+        assert len(candidates) == 1
+        assert candidates[0].url == "https://example.com/relative/path"
+
+        # page.evaluate should NOT have been called for URL resolution
+        # (it may be called for other purposes, but not for href resolution)

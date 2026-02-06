@@ -84,10 +84,10 @@ class SubjectExtractor:
         """
         subjects: list[str] = []
 
-        # Extract subjects from steps
+        # Extract subjects from steps (skip "Unknown" - those are follow-up actions)
         for step in steps:
             subject = self._get_subject_from_step(step)
-            if subject and subject not in subjects:
+            if subject and subject != "Unknown" and subject not in subjects:
                 subjects.append(subject)
 
         # Check for conjunctions in text indicating multiple subjects
@@ -154,19 +154,23 @@ class SubjectExtractor:
         for i, step in enumerate(steps):
             step_subject = self._get_subject_from_step(step)
 
-            # Find matching subject
-            matched_idx = None
-            for idx, subject in enumerate(subjects):
-                if subject.lower() in step_subject.lower() or step_subject.lower() in subject.lower():
-                    matched_idx = idx
-                    break
-
-            # If no match, add to current subject group
-            if matched_idx is None:
+            # If step has no clear subject (e.g., type_text, scroll), keep it with current
+            if step_subject == "Unknown":
                 matched_idx = current_subject_idx
+            else:
+                # Find matching subject
+                matched_idx = None
+                for idx, subject in enumerate(subjects):
+                    if subject.lower() in step_subject.lower() or step_subject.lower() in subject.lower():
+                        matched_idx = idx
+                        break
 
-            # Update current subject
-            current_subject_idx = matched_idx
+                # If no match found, add to current subject group
+                if matched_idx is None:
+                    matched_idx = current_subject_idx
+                else:
+                    # Update current subject when we find a new explicit subject
+                    current_subject_idx = matched_idx
 
             # Find or create group for this subject
             existing_group = None

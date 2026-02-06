@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -52,6 +53,20 @@ export default {
           bg:    'var(--color-stepper-bg)',
           hover: 'var(--color-stepper-hover)',
           text:  'var(--color-stepper-text)',
+        },
+        status: {
+          active:         'var(--color-status-active)',
+          'active-hover': 'var(--color-status-active-hover)',
+          inactive:       'var(--color-status-inactive)',
+          'error-bg':     'var(--color-status-error-bg)',
+          'error-border': 'var(--color-status-error-border)',
+          'error-text':   'var(--color-status-error-text)',
+          'success-bg':   'var(--color-status-success-bg)',
+          'success-border':'var(--color-status-success-border)',
+          'success-text': 'var(--color-status-success-text)',
+          'info-bg':      'var(--color-status-info-bg)',
+          'info-border':  'var(--color-status-info-border)',
+          'info-text':    'var(--color-status-info-text)',
         },
       },
     },

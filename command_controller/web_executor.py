@@ -156,8 +156,25 @@ class WebExecutor:
             tprint(f"[WEB_EXEC] Opening URL in default browser: {final_url}")
 
         # Open in default browser (macOS)
-        subprocess.run(["open", final_url], check=False)
-        tprint(f"[WEB_EXEC] Opened {final_url} in default browser")
+        # Use "--" to prevent flag injection from crafted URLs
+        try:
+            subprocess.run(
+                ["open", "--", final_url],
+                check=True,
+                capture_output=True,
+                timeout=10
+            )
+            tprint(f"[WEB_EXEC] Opened {final_url} in default browser")
+        except subprocess.TimeoutExpired:
+            raise WebExecutionError(
+                code="WEB_OPEN_TIMEOUT",
+                message=f"Timeout opening URL: {final_url}"
+            )
+        except subprocess.CalledProcessError as exc:
+            raise WebExecutionError(
+                code="WEB_OPEN_FAILED",
+                message=f"Failed to open URL: {exc.stderr.decode() if exc.stderr else str(exc)}"
+            )
 
         # Store metadata for ExecutionResult enrichment
         self._last_resolution = result
@@ -348,10 +365,56 @@ class WebExecutor:
 
     @staticmethod
     def _is_safe_url(url: str | None) -> bool:
-        """Validate URL scheme is http/https."""
+        """Validate URL is safe to open in browser.
+
+        Checks:
+        - URL exists and has reasonable length
+        - Scheme is http or https
+        - Not localhost/loopback
+        - Not private IP ranges
+        - Not cloud metadata service
+        """
         if not url:
             return False
-        return url.startswith("http://") or url.startswith("https://")
+
+        # Length check (prevent DoS)
+        if len(url) > 2048:
+            return False
+
+        from urllib.parse import urlparse
+        import ipaddress
+
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return False
+
+        # Scheme validation
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        # Hostname validation
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block localhost
+        if hostname in ("localhost", "127.0.0.1", "::1"):
+            return False
+
+        # Block private IPs and metadata service
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+            # Block cloud metadata service
+            if str(ip) == "169.254.169.254":
+                return False
+        except ValueError:
+            # Not an IP address, hostname validation passed
+            pass
+
+        return True
 
     # ------------------------------------------------------------------
     # Cleanup

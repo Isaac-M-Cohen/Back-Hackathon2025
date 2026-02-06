@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
+from urllib.parse import urljoin
 import time
 import re
 
@@ -48,6 +50,7 @@ class URLResolutionResult:
     selected_reason: str | None  # "text_match" | "position" | "aria_label"
     elapsed_ms: int
     error_message: str | None = None
+    from_cache: bool = False  # Indicates if result came from cache
 
 
 class URLResolver:
@@ -63,6 +66,7 @@ class URLResolver:
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._page: Page | None = None  # Reuse single page across resolutions
+        self._page_lock = Lock()  # Protect page access for thread safety
         self._initialized = False
         self._cache = URLResolutionCache(ttl_secs=900)  # 15 minutes
 
@@ -89,108 +93,112 @@ class URLResolver:
         """
         start = time.monotonic()
 
-        # Check cache
+        # Check cache (outside lock for performance)
         cached = self._cache.get(query)
         if cached:
             if is_deep_logging():
                 deep_log(f"[DEEP][URL_RESOLVER] Cache hit for query={query!r}")
+            # Mark as cached result for transparency
+            cached.from_cache = True
             return cached
 
-        try:
-            self._ensure_browser()
+        # Acquire lock for all browser operations to prevent race conditions
+        with self._page_lock:
+            try:
+                self._ensure_browser()
 
-            # Infer initial URL to navigate to
-            initial_url = self._infer_initial_url(query)
-            if is_deep_logging():
-                deep_log(
-                    f"[DEEP][URL_RESOLVER] Resolving query={query!r} initial_url={initial_url}"
-                )
+                # Infer initial URL to navigate to
+                initial_url = self._infer_initial_url(query)
+                if is_deep_logging():
+                    deep_log(
+                        f"[DEEP][URL_RESOLVER] Resolving query={query!r} initial_url={initial_url}"
+                    )
 
-            # Reuse single page across resolutions
-            timeout_ms = self._settings.get("playwright_navigation_timeout_ms", 30000)
+                # Reuse single page across resolutions
+                timeout_ms = self._settings.get("playwright_navigation_timeout_ms", 30000)
 
-            # Navigate to initial URL
-            self._page.goto(initial_url, wait_until="domcontentloaded", timeout=timeout_ms)
-            self._page.wait_for_load_state("networkidle", timeout=timeout_ms)
+                # Navigate to initial URL
+                self._page.goto(initial_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                self._page.wait_for_load_state("networkidle", timeout=timeout_ms)
 
-            # Search DOM for relevant links
-            candidates = self._search_dom_for_links(self._page, query)
+                # Search DOM for relevant links
+                candidates = self._search_dom_for_links(self._page, query)
 
-            if is_deep_logging():
-                deep_log(
-                    f"[DEEP][URL_RESOLVER] Found {len(candidates)} candidates for query={query!r}"
-                )
+                if is_deep_logging():
+                    deep_log(
+                        f"[DEEP][URL_RESOLVER] Found {len(candidates)} candidates for query={query!r}"
+                    )
 
-            # Rank and select best match
-            best_candidate = self._rank_candidates(candidates, query)
+                # Rank and select best match
+                best_candidate = self._rank_candidates(candidates, query)
 
-            elapsed_ms = int((time.monotonic() - start) * 1000)
+                elapsed_ms = int((time.monotonic() - start) * 1000)
 
-            if best_candidate:
+                if best_candidate:
+                    result = URLResolutionResult(
+                        status="ok",
+                        resolved_url=best_candidate.url,
+                        search_query=query,
+                        candidates_found=len(candidates),
+                        selected_reason="text_match",
+                        elapsed_ms=elapsed_ms,
+                    )
+                else:
+                    result = URLResolutionResult(
+                        status="failed",
+                        resolved_url=None,
+                        search_query=query,
+                        candidates_found=len(candidates),
+                        selected_reason=None,
+                        elapsed_ms=elapsed_ms,
+                        error_message="No matching links found",
+                    )
+
+                # Cache result
+                self._cache.put(query, result)
+                return result
+
+            except PlaywrightTimeoutError as exc:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
                 result = URLResolutionResult(
-                    status="ok",
-                    resolved_url=best_candidate.url,
+                    status="timeout",
+                    resolved_url=None,
                     search_query=query,
-                    candidates_found=len(candidates),
-                    selected_reason="text_match",
+                    candidates_found=0,
+                    selected_reason=None,
                     elapsed_ms=elapsed_ms,
+                    error_message=f"Navigation timeout: {exc}",
                 )
-            else:
+                # Cache failures to avoid repeated attempts
+                self._cache.put(query, result)
+                return result
+            except PlaywrightError as exc:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
                 result = URLResolutionResult(
                     status="failed",
                     resolved_url=None,
                     search_query=query,
-                    candidates_found=len(candidates),
+                    candidates_found=0,
                     selected_reason=None,
                     elapsed_ms=elapsed_ms,
-                    error_message="No matching links found",
+                    error_message=f"Browser error: {exc}",
                 )
-
-            # Cache result
-            self._cache.put(query, result)
-            return result
-
-        except PlaywrightTimeoutError as exc:
-            elapsed_ms = int((time.monotonic() - start) * 1000)
-            result = URLResolutionResult(
-                status="timeout",
-                resolved_url=None,
-                search_query=query,
-                candidates_found=0,
-                selected_reason=None,
-                elapsed_ms=elapsed_ms,
-                error_message=f"Navigation timeout: {exc}",
-            )
-            # Cache failures to avoid repeated attempts
-            self._cache.put(query, result)
-            return result
-        except PlaywrightError as exc:
-            elapsed_ms = int((time.monotonic() - start) * 1000)
-            result = URLResolutionResult(
-                status="failed",
-                resolved_url=None,
-                search_query=query,
-                candidates_found=0,
-                selected_reason=None,
-                elapsed_ms=elapsed_ms,
-                error_message=f"Browser error: {exc}",
-            )
-            self._cache.put(query, result)
-            return result
-        except Exception as exc:
-            # Catch-all for unexpected errors
-            elapsed_ms = int((time.monotonic() - start) * 1000)
-            result = URLResolutionResult(
-                status="failed",
-                resolved_url=None,
-                search_query=query,
-                candidates_found=0,
-                selected_reason=None,
-                elapsed_ms=elapsed_ms,
-                error_message=f"Unexpected error: {exc}",
-            )
-            self._cache.put(query, result)
-            return result
+                self._cache.put(query, result)
+                return result
+            except Exception as exc:
+                # Catch-all for unexpected errors
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                result = URLResolutionResult(
+                    status="failed",
+                    resolved_url=None,
+                    search_query=query,
+                    candidates_found=0,
+                    selected_reason=None,
+                    elapsed_ms=elapsed_ms,
+                    error_message=f"Unexpected error: {exc}",
+                )
+                self._cache.put(query, result)
+                return result
 
     def _ensure_browser(self) -> None:
         """Initialize headless Playwright context on first call."""
@@ -286,10 +294,13 @@ class URLResolver:
                     # Calculate position score (earlier = higher)
                     position_score = max(0.1, 1.0 - (i / max(max_links, 1)))
 
-                    # Make URL absolute
-                    resolved_href = page.evaluate(
-                        f"(href) => new URL(href, document.baseURI).href", href
-                    )
+                    # Make URL absolute using Python's urljoin (avoids XSS via page.evaluate)
+                    try:
+                        current_url = page.url
+                        resolved_href = urljoin(current_url, href)
+                    except Exception:
+                        # Skip links that can't be resolved
+                        continue
 
                     candidates.append(
                         LinkCandidate(

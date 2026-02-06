@@ -168,6 +168,63 @@ flowchart TB
 - Command execution: LLM interprets intents -> Executor runs hotkeys, typing, apps, URLs.
 - Confirmation loop: Engine queues sensitive commands -> UI polls `/commands/pending`.
 
+## Quickstart
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- Playwright Chromium
+
+### 5-Step Setup
+
+1. **Install Python dependencies**
+   ```bash
+   pip install -e .
+   ```
+
+2. **Install Playwright browsers**
+   ```bash
+   playwright install chromium
+   ```
+
+3. **Install Node dependencies**
+   ```bash
+   cd webui && npm install && cd ..
+   ```
+
+4. **Configure settings** (optional)
+   ```bash
+   # Edit config/app_settings.json to customize
+   # Defaults work out-of-box
+   ```
+
+5. **Run the application**
+   ```bash
+   python main.py
+   # Opens Tauri desktop app with gesture/voice control
+   ```
+
+### Verify Installation
+
+Test URL resolution:
+```bash
+python -c "
+from command_controller.url_resolver import URLResolver
+resolver = URLResolver()
+result = resolver.resolve('youtube cats')
+print(f'Status: {result.status}')
+print(f'URL: {result.resolved_url}')
+resolver.shutdown()
+"
+```
+
+Expected output:
+```
+Status: ok
+URL: https://www.youtube.com/results?search_query=cats
+```
+
 ## Run (dev)
 
 - Desktop app:
@@ -185,6 +242,47 @@ Common settings:
 - `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
 - `GESTURE_USER_ID` for per-user datasets.
 - `ENABLE_VOICE=0` to disable voice features.
+
+## New: Web Executor System
+
+The latest release includes an intelligent URL resolution system that transforms simple queries into fully resolved URLs:
+
+### Features
+
+- **Smart Resolution:** "youtube cats" → navigates to YouTube search results
+- **Fallback Chain:** Tries resolution → search engine → homepage
+- **Caching:** 15-minute cache with LRU eviction for fast repeated queries
+- **Security:** Separate browser profiles, URL validation, configurable permissions
+- **Performance:** Browser warm-up, page reuse, DOM search optimization
+
+### Quick Example
+
+```python
+# User says: "open youtube cats"
+# System:
+# 1. Resolves to: https://www.youtube.com/results?search_query=cats
+# 2. Opens in Safari/Chrome (default browser)
+# 3. Caches result for 15 minutes
+```
+
+### Configuration
+
+Enable/disable features in `config/app_settings.json`:
+
+```json
+{
+  "use_playwright_for_web": true,        // Enhanced resolution
+  "enable_search_fallback": true,        // Fallback to search
+  "enable_homepage_fallback": true,      // Fallback to homepage
+  "warmup_url_resolver": true            // Pre-initialize browser
+}
+```
+
+### Documentation
+
+- **Complete Guide:** [`docs/WEB_EXECUTOR.md`](docs/WEB_EXECUTOR.md)
+- **Configuration Reference:** [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
+- **Security Audit:** [`security_notes.md`](security_notes.md)
 
 ## Notes
 
