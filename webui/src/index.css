@@ -9,15 +9,15 @@
     sans-serif;
 
   /* --- Surfaces --- */
-  --color-bg-base:            #f8fafc;
-  --color-bg-elevated:        #ffffff;
-  --color-bg-inset:           #f1f5f9;
-  --color-bg-input:           #ffffff;
+  --color-bg-base:            #e2e8f0;
+  --color-bg-elevated:        #f1f5f9;
+  --color-bg-inset:           #cbd5e1;
+  --color-bg-input:           #f8fafc;
 
   /* --- Surface hover --- */
-  --color-bg-base-hover:      #f1f5f9;
-  --color-bg-elevated-hover:  #f8fafc;
-  --color-bg-inset-hover:     #e2e8f0;
+  --color-bg-base-hover:      #cbd5e1;
+  --color-bg-elevated-hover:  #e2e8f0;
+  --color-bg-inset-hover:     #94a3b8;
 
   /* --- Text --- */
   --color-text-primary:       #0f172a;
@@ -26,90 +26,124 @@
   --color-text-on-accent:     #ffffff;
 
   /* --- Borders --- */
-  --color-border:             #e2e8f0;
-  --color-border-strong:      #cbd5e1;
-  --color-divider:            #f1f5f9;
+  --color-border:             #cbd5e1;
+  --color-border-strong:      #94a3b8;
+  --color-divider:            #e2e8f0;
 
   /* --- Accent (primary action) --- */
   --color-accent:             #3b82f6;
   --color-accent-hover:       #2563eb;
 
   /* --- Button: secondary --- */
-  --color-btn-secondary:      #e2e8f0;
-  --color-btn-secondary-hover:#cbd5e1;
+  --color-btn-secondary:      #f1f5f9;
+  --color-btn-secondary-hover:#e2e8f0;
   --color-btn-secondary-text: #334155;
 
   /* --- Button: tertiary/ghost --- */
   --color-btn-tertiary:       transparent;
-  --color-btn-tertiary-hover: #f1f5f9;
+  --color-btn-tertiary-hover: #f8fafc;
   --color-btn-tertiary-text:  #64748b;
 
   /* --- Chip/pill toggle --- */
   --color-chip-active:        #1e293b;
   --color-chip-active-text:   #ffffff;
-  --color-chip-idle:          #e2e8f0;
+  --color-chip-idle:          #f1f5f9;
   --color-chip-idle-text:     #334155;
-  --color-chip-idle-hover:    #cbd5e1;
+  --color-chip-idle-hover:    #e2e8f0;
 
   /* --- Toggle switch --- */
   --color-toggle-on:          #1e293b;
   --color-toggle-off:         #cbd5e1;
-  --color-toggle-knob:        #ffffff;
+  --color-toggle-knob:        #f8fafc;
 
   /* --- Stepper +/- buttons --- */
-  --color-stepper-bg:         #e2e8f0;
-  --color-stepper-hover:      #cbd5e1;
+  --color-stepper-bg:         #f1f5f9;
+  --color-stepper-hover:      #e2e8f0;
   --color-stepper-text:       #334155;
+
+  /* --- Status indicators --- */
+  --color-status-active:      #10b981;
+  --color-status-active-hover:#059669;
+  --color-status-inactive:    #ef4444;
+  --color-status-error-bg:    #fef2f2;
+  --color-status-error-border:#fecaca;
+  --color-status-error-text:  #991b1b;
+  --color-status-success-bg:  #f0fdf4;
+  --color-status-success-border:#bbf7d0;
+  --color-status-success-text:#166534;
+  --color-status-info-bg:     #fffbeb;
+  --color-status-info-border: #fde68a;
+  --color-status-info-text:   #78350f;
 }
 
 .dark {
-  --color-bg-base:            #0f172a;
-  --color-bg-elevated:        #1e293b;
-  --color-bg-inset:           #1e293b;
+  --color-bg-base:            #1e293b;
+  --color-bg-elevated:        #334155;
+  --color-bg-inset:           #0f172a;
   --color-bg-input:           #0f172a;
 
-  --color-bg-base-hover:      #1e293b;
-  --color-bg-elevated-hover:  #263348;
-  --color-bg-inset-hover:     #334155;
+  --color-bg-base-hover:      #334155;
+  --color-bg-elevated-hover:  #475569;
+  --color-bg-inset-hover:     #020617;
 
   --color-text-primary:       #f1f5f9;
   --color-text-secondary:     #cbd5e1;
   --color-text-tertiary:      #64748b;
   --color-text-on-accent:     #ffffff;
 
-  --color-border:             #334155;
-  --color-border-strong:      #475569;
-  --color-divider:            #1e293b;
+  --color-border:             #475569;
+  --color-border-strong:      #64748b;
+  --color-divider:            #334155;
 
   --color-accent:             #3b82f6;
   --color-accent-hover:       #60a5fa;
 
-  --color-btn-secondary:      #334155;
-  --color-btn-secondary-hover:#475569;
+  --color-btn-secondary:      #0f172a;
+  --color-btn-secondary-hover:#1e293b;
   --color-btn-secondary-text: #e2e8f0;
 
   --color-btn-tertiary:       transparent;
-  --color-btn-tertiary-hover: #1e293b;
+  --color-btn-tertiary-hover: #0f172a;
   --color-btn-tertiary-text:  #94a3b8;
 
   --color-chip-active:        #e2e8f0;
   --color-chip-active-text:   #0f172a;
-  --color-chip-idle:          #334155;
+  --color-chip-idle:          #0f172a;
   --color-chip-idle-text:     #cbd5e1;
-  --color-chip-idle-hover:    #475569;
+  --color-chip-idle-hover:    #1e293b;
 
   --color-toggle-on:          #e2e8f0;
-  --color-toggle-off:         #475569;
-  --color-toggle-knob:        #0f172a;
+  --color-toggle-off:         #0f172a;
+  --color-toggle-knob:        #1e293b;
 
-  --color-stepper-bg:         #334155;
-  --color-stepper-hover:      #475569;
+  --color-stepper-bg:         #0f172a;
+  --color-stepper-hover:      #1e293b;
   --color-stepper-text:       #e2e8f0;
+
+  /* --- Status indicators (dark mode) --- */
+  --color-status-active:      #10b981;
+  --color-status-active-hover:#34d399;
+  --color-status-inactive:    #ef4444;
+  --color-status-error-bg:    #450a0a;
+  --color-status-error-border:#7f1d1d;
+  --color-status-error-text:  #fecaca;
+  --color-status-success-bg:  #052e16;
+  --color-status-success-border:#14532d;
+  --color-status-success-text:#bbf7d0;
+  --color-status-info-bg:     #451a03;
+  --color-status-info-border: #78350f;
+  --color-status-info-text:   #fde68a;
 }
 
 html,
 body {
+  height: 100%;
+  overflow: hidden;
   transition: background-color 240ms ease, color 240ms ease;
+}
+
+#root {
+  height: 100%;
 }
 
 * {

@@ -932,29 +932,31 @@ function SettingsWindow() {
 
   if (!settingsDraft) {
     return (
-      <div className="min-h-screen bg-surface-base p-6 text-content-secondary">
+      <div className="h-screen bg-surface-base p-6 text-content-secondary overflow-hidden">
         Loading settings...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-base">
+    <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       {error && (
-        <div className="mx-auto max-w-4xl pt-6 px-6 text-sm text-status-error-text">
+        <div className="px-6 pt-4 text-sm text-status-error-text">
           {error}
         </div>
       )}
-      <SettingsModal
-        variant="window"
-        isOpen
-        values={settingsDraft}
-        onChange={setSettingsDraft}
-        onSave={saveSettings}
-        onClose={closeSettings}
-        onReset={() => setSettingsDraft(buildSettingsDraft())}
-        audioDevices={audioDevices}
-      />
+      <div className="flex-1 overflow-hidden">
+        <SettingsModal
+          variant="window"
+          isOpen
+          values={settingsDraft}
+          onChange={setSettingsDraft}
+          onSave={saveSettings}
+          onClose={closeSettings}
+          onReset={() => setSettingsDraft(buildSettingsDraft())}
+          audioDevices={audioDevices}
+        />
+      </div>
     </div>
   );
 }

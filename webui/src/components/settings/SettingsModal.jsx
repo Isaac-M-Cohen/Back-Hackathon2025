@@ -52,15 +52,17 @@ export default function SettingsModal({
 
   const content = (
     <div
-      className="bg-surface-elevated rounded-xl shadow-lg border border-line w-[480px] h-[340px] flex flex-col"
+      className="bg-surface-elevated rounded-xl shadow-lg border border-line w-[480px] h-[340px] flex flex-col overflow-hidden"
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex-1 flex overflow-hidden">
-        <div className="py-2.5 px-2 border-r border-line">
-          <TabSidebar currentTab={currentTab} onTabChange={setCurrentTab} />
+        <div className="w-40 border-r border-line flex flex-col">
+          <div className="flex-1 overflow-y-auto py-2.5 px-2">
+            <TabSidebar currentTab={currentTab} onTabChange={setCurrentTab} />
+          </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {currentTab === "appearance" && (
               <AppearanceTab values={values} onChange={onChange} />
@@ -107,8 +109,54 @@ export default function SettingsModal({
 
   if (variant === "window") {
     return (
-      <div className="min-h-screen bg-surface-base p-6">
-        <div className="w-full max-w-4xl mx-auto">{content}</div>
+      <div className="h-full bg-surface-elevated flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          <div className="w-44 border-r border-line flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto py-2.5 px-2">
+              <TabSidebar currentTab={currentTab} onTabChange={setCurrentTab} />
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {currentTab === "appearance" && (
+                <AppearanceTab values={values} onChange={onChange} />
+              )}
+              {currentTab === "io" && (
+                <IOTab
+                  values={values}
+                  onChange={onChange}
+                  audioDevices={audioDevices}
+                />
+              )}
+              {currentTab === "advanced" && (
+                <AdvancedTab values={values} onChange={onChange} />
+              )}
+            </div>
+            <div className="border-t border-line px-4 py-2.5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-2.5 py-1 text-[11px] rounded text-content-tertiary hover:text-content-secondary transition-colors"
+              >
+                Reset to defaults
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-2.5 py-1 text-[11px] rounded text-content-secondary hover:text-content-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-3 py-1 text-[11px] rounded bg-accent text-content-onaccent hover:bg-accent-hover transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
