@@ -29,6 +29,8 @@ dist/
 .DS_Store
 .idea/
 .idea/workspace.xml
+.claude/skills/
+voice_module/
 .vscode/
 
 # Misc
