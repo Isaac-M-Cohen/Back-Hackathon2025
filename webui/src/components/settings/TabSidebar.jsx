@@ -6,14 +6,14 @@ export default function TabSidebar({ currentTab, onTabChange }) {
     { id: "appearance", label: "Appearance", icon: Palette },
     { id: "io", label: "I/O", icon: Sliders },
     { id: "advanced", label: "Advanced", icon: Settings },
-    { id: "test-1", label: "Test Tab 1", icon: Settings },
-    { id: "test-2", label: "Test Tab 2", icon: Settings },
-    { id: "test-3", label: "Test Tab 3", icon: Settings },
-    { id: "test-4", label: "Test Tab 4", icon: Settings },
-    { id: "test-5", label: "Test Tab 5", icon: Settings },
-    { id: "test-6", label: "Test Tab 6", icon: Settings },
-    { id: "test-7", label: "Test Tab 7", icon: Settings },
-    { id: "test-8", label: "Test Tab 8", icon: Settings },
+    { id: "test-1", label: "test.tab_1", icon: Settings },
+    { id: "test-2", label: "test.tab_2", icon: Settings },
+    { id: "test-3", label: "test.tab_3", icon: Settings },
+    { id: "test-4", label: "test.tab_4", icon: Settings },
+    { id: "test-5", label: "test.tab_5", icon: Settings },
+    { id: "test-6", label: "test.tab_6", icon: Settings },
+    { id: "test-7", label: "test.tab_7", icon: Settings },
+    { id: "test-8", label: "test.tab_8", icon: Settings },
   ];
 
   return (

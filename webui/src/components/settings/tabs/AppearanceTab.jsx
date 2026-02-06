@@ -5,18 +5,18 @@ export default function AppearanceTab({ values, onChange }) {
   const updateSetting = (key, value) => onChange({ ...values, [key]: value });
 
   const testControls = [
-    { key: "appearance_spacing", label: "Spacing Scale", min: 0, max: 10, step: 1 },
-    { key: "appearance_radius", label: "Corner Radius", min: 0, max: 20, step: 1 },
-    { key: "appearance_shadow", label: "Shadow Depth", min: 0, max: 10, step: 1 },
-    { key: "appearance_contrast", label: "Contrast", min: 0, max: 100, step: 5 },
-    { key: "appearance_brightness", label: "Brightness", min: 0, max: 100, step: 5 },
-    { key: "appearance_density", label: "UI Density", min: 0, max: 10, step: 1 },
-    { key: "appearance_glow", label: "Glow Intensity", min: 0, max: 10, step: 1 },
-    { key: "appearance_border", label: "Border Weight", min: 0, max: 6, step: 1 },
-    { key: "appearance_text_scale", label: "Text Scale", min: 80, max: 120, step: 5 },
-    { key: "appearance_icon_scale", label: "Icon Scale", min: 80, max: 120, step: 5 },
-    { key: "appearance_noise", label: "Grain Amount", min: 0, max: 10, step: 1 },
-    { key: "appearance_animation", label: "Motion Speed", min: 0, max: 10, step: 1 },
+    { key: "test_spacing", label: "test.spacing", min: 0, max: 10, step: 1 },
+    { key: "test_radius", label: "test.radius", min: 0, max: 20, step: 1 },
+    { key: "test_shadow", label: "test.shadow", min: 0, max: 10, step: 1 },
+    { key: "test_contrast", label: "test.contrast", min: 0, max: 100, step: 5 },
+    { key: "test_brightness", label: "test.brightness", min: 0, max: 100, step: 5 },
+    { key: "test_density", label: "test.density", min: 0, max: 10, step: 1 },
+    { key: "test_glow", label: "test.glow", min: 0, max: 10, step: 1 },
+    { key: "test_border", label: "test.border", min: 0, max: 6, step: 1 },
+    { key: "test_text_scale", label: "test.text_scale", min: 80, max: 120, step: 5 },
+    { key: "test_icon_scale", label: "test.icon_scale", min: 80, max: 120, step: 5 },
+    { key: "test_noise", label: "test.noise", min: 0, max: 10, step: 1 },
+    { key: "test_animation", label: "test.animation", min: 0, max: 10, step: 1 },
   ];
 
   const getValue = (key, fallback) =>
