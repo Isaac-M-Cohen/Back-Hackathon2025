@@ -76,6 +76,8 @@ def validate_step(step: dict) -> dict:
         if not url:
             raise ValueError("open_url requires 'url'")
         cleaned["url"] = url
+        if "defer_open" in step:
+            cleaned["defer_open"] = bool(step.get("defer_open"))
         return cleaned
 
     if intent == "wait_for_url":

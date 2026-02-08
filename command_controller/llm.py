@@ -110,6 +110,7 @@ class LocalLLMInterpreter:
             "- When opening a URL for in-browser interaction (typing, clicking, etc.), set \"target\":\"web\" on the open_url step. Subsequent type_text, key_combo, click, and scroll steps will automatically run inside the browser.\n"
             "- When target is \"web\", prefer using a CSS \"selector\" on type_text and click to target specific elements (e.g. \"input[name=search_query]\").\n"
             "- Do NOT emit wait_for_url steps when using target:\"web\" — page-load waiting is handled automatically.\n"
+            "- For websites (YouTube, Gmail, Amazon, etc.) or any command that includes web search/typing, use open_url with target:\"web\". Do NOT use open_app for websites.\n"
             f"Context: {context_json}\n"
             f"Request: {text}"
         )

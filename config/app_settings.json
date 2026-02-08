@@ -1,6 +1,6 @@
 {
   "app_name": "easy",
-  "theme": "dark",
+  "theme": "light",
   "language": "en",
   "log_level": "DEEP",
   "log_level_comment": "Levels: ERROR, WARN, INFO, DEBUG, DEEP (most verbose).",
@@ -27,4 +27,6 @@
   "voice_partial_window_secs": 8,
   "microphone_device_index": null,
   "speaker_device_index": null
+  ,
+  "playwright_headless": true
 }
