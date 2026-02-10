@@ -141,10 +141,15 @@ class Executor:
             for step in steps
         ):
             return {}
-        web_exec = self._get_web_executor()
-        if hasattr(web_exec, "resolve_web_steps"):
-            return web_exec.resolve_web_steps(steps)
-        return {}
+        from command_controller.web_executor import WebExecutor
+
+        temp_exec = WebExecutor()
+        try:
+            if hasattr(temp_exec, "resolve_web_steps"):
+                return temp_exec.resolve_web_steps(steps)
+            return {}
+        finally:
+            temp_exec.shutdown()
 
     def _execute_web_step(self, step: dict) -> ExecutionResult:
         intent = str(step.get("intent", "")).strip() or "web"

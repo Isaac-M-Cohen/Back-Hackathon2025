@@ -344,10 +344,7 @@ def set_gesture_command(req: SetGestureCommandRequest):
                 "resolved_query": resolved.get("query"),
             },
         )
-        try:
-            controller.engine.executor.prewarm_web(steps)
-        except Exception as exc:
-            tprint(f"[API] Prewarm failed for {req.label!r}: {exc}")
+        # Avoid prewarming Playwright here to keep web automation thread-safe.
     else:
         workflow.dataset.set_command_steps(req.label, None)
         controller.dataset.set_command_steps(req.label, None)

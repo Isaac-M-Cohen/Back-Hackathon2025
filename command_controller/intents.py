@@ -76,6 +76,11 @@ def validate_step(step: dict) -> dict:
         if not url:
             raise ValueError("open_url requires 'url'")
         cleaned["url"] = url
+        resolved_url = step.get("resolved_url")
+        if isinstance(resolved_url, str) and resolved_url.strip():
+            cleaned["resolved_url"] = resolved_url.strip()
+        if "precomputed" in step:
+            cleaned["precomputed"] = bool(step.get("precomputed"))
         if "defer_open" in step:
             cleaned["defer_open"] = bool(step.get("defer_open"))
         return cleaned
