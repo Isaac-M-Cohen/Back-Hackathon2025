@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+import threading
 from urllib.parse import urljoin
 import time
 import re
@@ -68,6 +69,7 @@ class URLResolver:
         self._page: Page | None = None  # Reuse single page across resolutions
         self._page_lock = Lock()  # Protect page access for thread safety
         self._initialized = False
+        self._playwright_thread_id: int | None = None
         self._cache = URLResolutionCache(ttl_secs=900)  # 15 minutes
 
     def warmup(self) -> None:
@@ -203,7 +205,14 @@ class URLResolver:
     def _ensure_browser(self) -> None:
         """Initialize headless Playwright context on first call."""
         if self._initialized:
-            return
+            current_thread_id = threading.get_ident()
+            if self._playwright_thread_id != current_thread_id:
+                tprint(
+                    "[URL_RESOLVER] Playwright initialized on different thread; restarting browser context."
+                )
+                self.shutdown()
+            else:
+                return
 
         profile_dir = self._settings.get(
             "playwright_resolver_profile", "user_data/playwright_resolver"
@@ -224,6 +233,7 @@ class URLResolver:
                 else self._browser.new_page()
             )
             self._initialized = True
+            self._playwright_thread_id = threading.get_ident()
             tprint("[URL_RESOLVER] Headless Playwright context initialized")
         except PlaywrightError as exc:
             # Cleanup on failure
@@ -233,6 +243,7 @@ class URLResolver:
                 except Exception:
                     pass
             self._playwright = None
+            self._playwright_thread_id = None
             raise RuntimeError(
                 f"Failed to launch resolver browser: {exc}\n"
                 "If Chromium is not installed, run: playwright install chromium"
@@ -245,6 +256,7 @@ class URLResolver:
                 except Exception:
                     pass
             self._playwright = None
+            self._playwright_thread_id = None
             raise RuntimeError(
                 f"Unexpected error initializing browser: {exc}"
             ) from exc
@@ -437,3 +449,4 @@ class URLResolver:
         self._page = None
         self._browser = None
         self._playwright = None
+        self._playwright_thread_id = None

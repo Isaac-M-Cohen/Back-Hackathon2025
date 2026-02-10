@@ -5,14 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9177b963-cf03-4569-ab04-4a6d4093da51" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SESSION.md" beforeDir="false" afterPath="$PROJECT_DIR$/SESSION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/command_controller/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/executor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/command_controller/llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/llm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/app_settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/config/app_settings.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/gesture_recognizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gesture_module/workflow.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_module/workflow.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/command_controller/url_resolver.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/url_resolver.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/command_controller/web_executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/web_executor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/video_module/gesture_ml.py" beforeDir="false" afterPath="$PROJECT_DIR$/video_module/gesture_ml.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -52,78 +51,74 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_MARK_IGNORED_FILES_AS_EXCLUDED&quot;: &quot;true&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.Backend.executor&quot;: &quot;Run&quot;,
-    &quot;Python.NativeWindow.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Port.executor&quot;: &quot;Run&quot;,
-    &quot;Python.WebUI.executor&quot;: &quot;Run&quot;,
-    &quot;Python.controller.executor&quot;: &quot;Run&quot;,
-    &quot;Python.file_utils.executor&quot;: &quot;Run&quot;,
-    &quot;Python.hand_tracking.executor&quot;: &quot;Run&quot;,
-    &quot;Python.logger.executor&quot;: &quot;Run&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.stt_engine.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;voice-gesture-executor&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/isaaccohen/Desktop/IntelliJ/Back-Hackathon2025&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;npm.Frontend.executor&quot;: &quot;Run&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;SDKs&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_MARK_IGNORED_FILES_AS_EXCLUDED": "true",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.Back-Hackathon2025-bundling.executor": "Run",
+    "Python.Back-Hackathon2025.executor": "Run",
+    "Python.Backend.executor": "Run",
+    "Python.NativeWindow.executor": "Run",
+    "Python.Port.executor": "Run",
+    "Python.WebUI.executor": "Run",
+    "Python.controller.executor": "Run",
+    "Python.file_utils.executor": "Run",
+    "Python.hand_tracking.executor": "Run",
+    "Python.logger.executor": "Run",
+    "Python.main.executor": "Run",
+    "Python.stt_engine.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "refactor/executer",
+    "junie.onboarding.icon.badge.shown": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/isaaccohen/Desktop/IntelliJ/Back-Hackathon2025",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "npm.Frontend.executor": "Run",
+    "project.structure.last.edited": "SDKs",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.2",
+    "settings.editor.selected.configurable": "DSTables",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.NativeWindow">
-    <configuration name="WebUI" type="CompoundRunConfigurationType">
-      <toRun name="Frontend" type="js.build_tools.npm" />
-      <toRun name="Backend" type="PythonConfigurationType" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Backend" type="PythonConfigurationType" factoryName="Python">
+  <component name="RunManager" selected="Python.Back-Hackathon2025">
+    <configuration name="Back-Hackathon2025-bundling" type="PythonConfigurationType" factoryName="Python">
       <module name="Back-Hackathon2025" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
         <env name="PYTHONUNBUFFERED" value="1" />
-        <env name="PATH" value="$USER_HOME$/.cargo/bin:$PATH" />
       </envs>
       <option name="SDK_HOME" value="/opt/homebrew/Caskroom/miniconda/base/envs/qt/bin/python" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="false" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/../Back-Hackathon2025-bundling" />
+      <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="uvicorn" />
-      <option name="PARAMETERS" value="api.server:app --reload  --port 8080" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../Back-Hackathon2025-bundling/main.py" />
+      <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="true" />
+      <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="NativeWindow" type="PythonConfigurationType" factoryName="Python">
+    <configuration name="Back-Hackathon2025" type="PythonConfigurationType" factoryName="Python">
       <module name="Back-Hackathon2025" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -146,23 +141,9 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="Frontend" type="js.build_tools.npm">
-      <package-json value="$PROJECT_DIR$/webui/package.json" />
-      <command value="run" />
-      <scripts>
-        <script value="dev" />
-      </scripts>
-      <node-interpreter value="project" />
-      <envs>
-        <env name="VITE_API_BASE" value="http://localhost:8080" />
-      </envs>
-      <method v="2" />
-    </configuration>
     <list>
-      <item itemvalue="Compound.WebUI" />
-      <item itemvalue="npm.Frontend" />
-      <item itemvalue="Python.NativeWindow" />
-      <item itemvalue="Python.Backend" />
+      <item itemvalue="Python.Back-Hackathon2025" />
+      <item itemvalue="Python.Back-Hackathon2025-bundling" />
     </list>
   </component>
   <component name="SharedIndexes">
@@ -215,9 +196,10 @@
     <SUITE FILE_PATH="coverage/HackathonProject2025$main.coverage" NAME="main Coverage Results" MODIFIED="1764910443746" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$Port.coverage" NAME="Port Coverage Results" MODIFIED="1766448959980" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$main.coverage" NAME="main Coverage Results" MODIFIED="1766444848482" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Back_Hackathon2025$Back_Hackathon2025_bundling.coverage" NAME="Back-Hackathon2025-bundling Coverage Results" MODIFIED="1770277713063" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/../Back-Hackathon2025-bundling" />
     <SUITE FILE_PATH="coverage/HackathonProject2025$logger.coverage" NAME="logger Coverage Results" MODIFIED="1764910436513" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$controller.coverage" NAME="controller Coverage Results" MODIFIED="1765140750267" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
-    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="NativeWindow Coverage Results" MODIFIED="1769432354481" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="Back-Hackathon2025 Coverage Results" MODIFIED="1770744509894" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$stt_engine.coverage" NAME="stt_engine Coverage Results" MODIFIED="1765198274346" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/voice_module" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$Backend.coverage" NAME="Backend Coverage Results" MODIFIED="1766531719087" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>

@@ -250,28 +250,104 @@ def set_gesture_command(req: SetGestureCommandRequest):
     if is_deep_logging():
         tprint(f"[DEEP][API] set_gesture_command label={req.label!r} command={req.command!r}")
     if req.command.strip():
-        try:
-            settings = get_settings()
-            timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    controller.engine.interpreter.interpret,
-                    req.command,
-                    {},
-                    ALLOWED_INTENTS,
-                )
-                payload = future.result(timeout=timeout_secs)
-            steps = validate_steps(normalize_steps(payload))
-            if not steps:
-                raise ValueError("No executable steps returned")
-        except concurrent.futures.TimeoutError:
-            raise HTTPException(status_code=504, detail="Command parsing timed out")
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
+        cached = workflow.dataset.get_command_metadata(req.label)
+        steps = None
+        cached_resolved = None
+        if cached and cached.get("command") == req.command:
+            cached_resolved = cached.get("resolved_url")
+            if cached_resolved:
+                steps = [
+                    {
+                        "intent": "open_url",
+                        "target": "web",
+                        "url": cached_resolved,
+                        "resolved_url": cached_resolved,
+                        "precomputed": True,
+                    }
+                ]
+            elif cached.get("steps"):
+                try:
+                    steps = validate_steps(cached.get("steps", []))
+                    if is_deep_logging():
+                        tprint(f"[DEEP][API] reuse_cached_steps label={req.label!r}")
+                except Exception:
+                    steps = None
+        if steps and cached_resolved:
+            if is_deep_logging():
+                tprint(f"[DEEP][API] reuse_cached_resolved label={req.label!r}")
+        if steps is None:
+            try:
+                settings = get_settings()
+                timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        controller.engine.interpreter.interpret,
+                        req.command,
+                        {},
+                        ALLOWED_INTENTS,
+                    )
+                    payload = future.result(timeout=timeout_secs)
+                steps = validate_steps(normalize_steps(payload))
+                if not steps:
+                    raise ValueError("No executable steps returned")
+            except concurrent.futures.TimeoutError:
+                raise HTTPException(status_code=504, detail="Command parsing timed out")
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
+        resolved = {}
+        if not cached_resolved:
+            try:
+                settings = get_settings()
+                timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        controller.engine.executor.resolve_web_steps,
+                        steps,
+                    )
+                    resolved = future.result(timeout=timeout_secs)
+            except concurrent.futures.TimeoutError:
+                tprint(f"[API] Resolve steps timed out for {req.label!r}")
+                resolved = {}
+            except Exception as exc:
+                tprint(f"[API] Resolve steps failed for {req.label!r}: {exc}")
+                resolved = {}
+
+        if resolved.get("resolved_url"):
+            steps = [
+                {
+                    "intent": "open_url",
+                    "target": "web",
+                    "url": resolved["resolved_url"],
+                    "resolved_url": resolved["resolved_url"],
+                    "precomputed": True,
+                }
+            ]
+
         if is_deep_logging():
             tprint(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
+
         workflow.dataset.set_command_steps(req.label, steps)
         controller.dataset.set_command_steps(req.label, steps)
+        urls = [
+            str(step.get("url"))
+            for step in steps
+            if str(step.get("intent")) == "open_url" and step.get("url")
+        ]
+        workflow.dataset.set_command_metadata(
+            req.label,
+            {
+                "command": req.command,
+                "steps": steps,
+                "urls": urls,
+                "resolved_url": resolved.get("resolved_url"),
+                "resolved_base_url": resolved.get("base_url"),
+                "resolved_query": resolved.get("query"),
+            },
+        )
+        try:
+            controller.engine.executor.prewarm_web(steps)
+        except Exception as exc:
+            tprint(f"[API] Prewarm failed for {req.label!r}: {exc}")
     else:
         workflow.dataset.set_command_steps(req.label, None)
         controller.dataset.set_command_steps(req.label, None)

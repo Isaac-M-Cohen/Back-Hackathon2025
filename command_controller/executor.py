@@ -121,6 +121,31 @@ class Executor:
             self._web_executor = WebExecutor()
         return self._web_executor
 
+    def prewarm_web(self, steps: list[dict]) -> None:
+        """Warm the web executor if any web-target steps are present."""
+        if not any(
+            (step.get("target") == "web")
+            or str(step.get("intent", "")).startswith("web_")
+            for step in steps
+        ):
+            return
+        web_exec = self._get_web_executor()
+        if hasattr(web_exec, "warmup_for_steps"):
+            web_exec.warmup_for_steps(steps)
+
+    def resolve_web_steps(self, steps: list[dict]) -> dict:
+        """Resolve web steps into a direct URL for instant execution."""
+        if not any(
+            (step.get("target") == "web")
+            or str(step.get("intent", "")).startswith("web_")
+            for step in steps
+        ):
+            return {}
+        web_exec = self._get_web_executor()
+        if hasattr(web_exec, "resolve_web_steps"):
+            return web_exec.resolve_web_steps(steps)
+        return {}
+
     def _execute_web_step(self, step: dict) -> ExecutionResult:
         intent = str(step.get("intent", "")).strip() or "web"
         try:

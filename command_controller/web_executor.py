@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote_plus, urlparse
@@ -25,12 +26,15 @@ class WebExecutor:
         self._browser = None
         self._page = None
         self._initialized = False
+        self._playwright_thread_id: int | None = None
         self._defer_open_default = False
         self._pending_search_text: str | None = None
         self._last_open_url: str | None = None
         self._playwright_available = True
         self._missing_playwright = False
         self._missing_playwright_reason: str | None = None
+        self._fallback_base_url: str | None = None
+        self._fallback_search_text: str | None = None
 
         # Lazy initialization for URL resolution
         self._url_resolver = None
@@ -44,7 +48,14 @@ class WebExecutor:
     def _ensure_browser(self) -> None:
         """Launch a persistent Chromium context on first call."""
         if self._initialized:
-            return
+            current_thread_id = threading.get_ident()
+            if self._playwright_thread_id != current_thread_id:
+                tprint(
+                    "[WEB_EXEC] Playwright initialized on different thread; restarting browser context."
+                )
+                self._shutdown_browser()
+            else:
+                return
 
         from playwright.sync_api import sync_playwright
 
@@ -77,7 +88,25 @@ class WebExecutor:
             else self._browser.new_page()
         )
         self._initialized = True
+        self._playwright_thread_id = threading.get_ident()
         tprint("[WEB_EXEC] Playwright browser context initialized")
+
+    def _shutdown_browser(self) -> None:
+        if self._browser:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+        if self._playwright:
+            try:
+                self._playwright.stop()
+            except Exception:
+                pass
+        self._browser = None
+        self._page = None
+        self._playwright = None
+        self._initialized = False
+        self._playwright_thread_id = None
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -87,6 +116,9 @@ class WebExecutor:
         """Route a single web-target step to the appropriate adapter."""
         intent = step.get("intent")
         try:
+            if intent == "open_url" and step.get("resolved_url"):
+                self._handle_open_url(step)
+                return
             if not self._playwright_available:
                 if self._missing_playwright:
                     raise WebExecutionError(
@@ -159,7 +191,15 @@ class WebExecutor:
     def _handle_open_url(self, step: dict) -> None:
         """Enhanced open_url handler with resolution and fallback."""
         url = step.get("url", "")
+        resolved_url = step.get("resolved_url")
         settings = get_settings()
+
+        if resolved_url:
+            if settings.get("request_before_open_url", False):
+                tprint(f"[WEB_EXEC] Opening URL in default browser: {resolved_url}")
+            self._open_default_browser(resolved_url)
+            self._last_open_url = resolved_url
+            return
 
         # Check if enhanced web flow is enabled
         if not settings.get("use_playwright_for_web", True):
@@ -625,22 +665,18 @@ class WebExecutor:
         ]
         return candidates[0] if candidates else None
 
+    @staticmethod
+    def _build_search_candidates(base_url: str, query: str) -> str | None:
+        """Return the most likely search URL for a base origin."""
+        return WebExecutor._build_search_url(base_url, query)
+
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
     def shutdown(self) -> None:
         """Close browser, Playwright, and URL resolver."""
-        if self._browser:
-            try:
-                self._browser.close()
-            except Exception:
-                pass
-        if self._playwright:
-            try:
-                self._playwright.stop()
-            except Exception:
-                pass
+        self._shutdown_browser()
 
         # Cleanup URL resolver
         if self._url_resolver:
@@ -649,10 +685,71 @@ class WebExecutor:
             except Exception:
                 pass
 
-        self._initialized = False
-        self._browser = None
-        self._page = None
-        self._playwright = None
         self._url_resolver = None
         self._fallback_chain = None
         self._last_resolution = None
+
+    def warmup_for_steps(self, steps: list[dict]) -> None:
+        """Warm the Playwright browser for web intents without navigation."""
+        if not any(
+            (step.get("target") == "web")
+            or str(step.get("intent", "")).startswith("web_")
+            for step in steps
+        ):
+            return
+        self._ensure_browser()
+        tprint("[WEB_EXEC] Warmed browser for web intents")
+
+    def resolve_web_steps(self, steps: list[dict]) -> dict:
+        """Resolve a web command into a direct URL for instant execution."""
+        open_step = None
+        query_step = None
+        key_step = None
+        for step in steps:
+            if step.get("intent") == "open_url" and (
+                step.get("target") in (None, "web")
+            ):
+                open_step = step
+            elif step.get("intent") == "type_text" and (
+                step.get("target") in (None, "web")
+            ):
+                query_step = step
+            elif step.get("intent") == "key_combo" and (
+                step.get("target") in (None, "web")
+            ):
+                key_step = step
+
+        if not open_step or not query_step or not key_step:
+            return {}
+
+        url = str(open_step.get("url") or "").strip()
+        query = str(query_step.get("text") or "").strip()
+        if not url or not query:
+            return {}
+
+        try:
+            self._ensure_browser()
+        except Exception as exc:
+            tprint(f"[WEB_EXEC] Resolve warm-up failed: {exc}")
+            return {}
+
+        try:
+            self._page.goto(url, wait_until="domcontentloaded")
+            try:
+                self._page.wait_for_load_state("domcontentloaded", timeout=4000)
+            except Exception:
+                pass
+            base_url = self._page.url or url
+        except Exception as exc:
+            tprint(f"[WEB_EXEC] Resolve navigation failed: {exc}")
+            return {}
+
+        search_url = self._build_search_candidates(base_url, query)
+        if not search_url:
+            return {}
+
+        return {
+            "resolved_url": search_url,
+            "base_url": base_url,
+            "query": query,
+        }
