@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import quote_plus, urlparse
 
 from command_controller.intents import WebExecutionError
 from utils.log_utils import tprint
@@ -24,6 +26,15 @@ class WebExecutor:
         self._browser = None
         self._page = None
         self._initialized = False
+        self._playwright_thread_id: int | None = None
+        self._defer_open_default = False
+        self._pending_search_text: str | None = None
+        self._last_open_url: str | None = None
+        self._playwright_available = True
+        self._missing_playwright = False
+        self._missing_playwright_reason: str | None = None
+        self._fallback_base_url: str | None = None
+        self._fallback_search_text: str | None = None
 
         # Lazy initialization for URL resolution
         self._url_resolver = None
@@ -37,7 +48,14 @@ class WebExecutor:
     def _ensure_browser(self) -> None:
         """Launch a persistent Chromium context on first call."""
         if self._initialized:
-            return
+            current_thread_id = threading.get_ident()
+            if self._playwright_thread_id != current_thread_id:
+                tprint(
+                    "[WEB_EXEC] Playwright initialized on different thread; restarting browser context."
+                )
+                self._shutdown_browser()
+            else:
+                return
 
         from playwright.sync_api import sync_playwright
 
@@ -70,7 +88,25 @@ class WebExecutor:
             else self._browser.new_page()
         )
         self._initialized = True
+        self._playwright_thread_id = threading.get_ident()
         tprint("[WEB_EXEC] Playwright browser context initialized")
+
+    def _shutdown_browser(self) -> None:
+        if self._browser:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+        if self._playwright:
+            try:
+                self._playwright.stop()
+            except Exception:
+                pass
+        self._browser = None
+        self._page = None
+        self._playwright = None
+        self._initialized = False
+        self._playwright_thread_id = None
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -80,7 +116,45 @@ class WebExecutor:
         """Route a single web-target step to the appropriate adapter."""
         intent = step.get("intent")
         try:
-            self._ensure_browser()
+            if intent == "open_url" and step.get("resolved_url"):
+                self._handle_open_url(step)
+                return
+            if not self._playwright_available:
+                if self._missing_playwright:
+                    raise WebExecutionError(
+                        code="WEB_PLAYWRIGHT_MISSING",
+                        message=self._missing_playwright_reason
+                        or "Playwright not installed. Install with: pip install playwright && playwright install chromium",
+                    )
+                self._handle_web_fallback(step)
+                return
+            try:
+                self._ensure_browser()
+            except ModuleNotFoundError:
+                self._playwright_available = False
+                self._missing_playwright = True
+                self._missing_playwright_reason = (
+                    "Playwright not installed. Install with: pip install playwright && playwright install chromium"
+                )
+                tprint("[WEB_EXEC] Playwright not installed; refusing to run web automation.")
+                raise WebExecutionError(
+                    code="WEB_PLAYWRIGHT_MISSING",
+                    message=self._missing_playwright_reason,
+                )
+            except RuntimeError as exc:
+                msg = str(exc).lower()
+                if "playwright" in msg or "chromium" in msg or "install" in msg:
+                    self._playwright_available = False
+                    self._missing_playwright = True
+                    self._missing_playwright_reason = (
+                        "Playwright/Chromium unavailable. Install with: playwright install chromium"
+                    )
+                    tprint("[WEB_EXEC] Playwright unavailable; refusing to run web automation.")
+                    raise WebExecutionError(
+                        code="WEB_PLAYWRIGHT_MISSING",
+                        message=self._missing_playwright_reason,
+                    )
+                raise
 
             if intent == "open_url":
                 self._handle_open_url(step)
@@ -117,7 +191,29 @@ class WebExecutor:
     def _handle_open_url(self, step: dict) -> None:
         """Enhanced open_url handler with resolution and fallback."""
         url = step.get("url", "")
+        resolved_url = step.get("resolved_url")
         settings = get_settings()
+
+        if resolved_url:
+            if step.get("precomputed"):
+                tprint(f"[WEB_EXEC] Using precomputed URL: {resolved_url}")
+            if settings.get("request_before_open_url", False):
+                tprint(f"[WEB_EXEC] Opening URL in default browser: {resolved_url}")
+            try:
+                self._open_default_browser(resolved_url)
+                self._last_open_url = resolved_url
+                return
+            except WebExecutionError as exc:
+                # Fallback: if precomputed URL fails, try original URL
+                tprint(f"[WEB_EXEC] Precomputed URL failed ({exc.code}), falling back to original URL: {url}")
+                if url and url != resolved_url:
+                    try:
+                        self._open_default_browser(url)
+                        self._last_open_url = url
+                        return
+                    except WebExecutionError:
+                        pass
+                raise
 
         # Check if enhanced web flow is enabled
         if not settings.get("use_playwright_for_web", True):
@@ -132,17 +228,25 @@ class WebExecutor:
         # Enhanced path: URL resolution + fallback
         if is_deep_logging():
             deep_log(f"[DEEP][WEB_EXEC] Enhanced path: resolving url={url}")
+        else:
+            tprint("[WEB_EXEC] No precomputed URL, resolving dynamically")
 
-        fallback_chain = self._get_fallback_chain()
-        result = fallback_chain.execute(url)
+        result = None
+        final_url = None
+        if self._is_absolute_url(url):
+            final_url = url
+        else:
+            fallback_chain = self._get_fallback_chain()
+            result = fallback_chain.execute(url)
 
-        if result.status == "all_failed":
-            raise WebExecutionError(
-                code="WEB_RESOLUTION_FAILED",
-                message=f"Failed to resolve URL: {url}",
-            )
+            if result.status == "all_failed":
+                tprint("[WEB_EXEC] Precomputed URL failed, falling back to resolution")
+                raise WebExecutionError(
+                    code="WEB_RESOLUTION_FAILED",
+                    message=f"Failed to resolve URL: {url}",
+                )
 
-        final_url = result.final_url
+            final_url = result.final_url
 
         # Security: validate URL scheme
         if not self._is_safe_url(final_url):
@@ -155,26 +259,18 @@ class WebExecutor:
         if settings.get("request_before_open_url", False):
             tprint(f"[WEB_EXEC] Opening URL in default browser: {final_url}")
 
-        # Open in default browser (macOS)
-        # Use "--" to prevent flag injection from crafted URLs
-        try:
-            subprocess.run(
-                ["open", "--", final_url],
-                check=True,
-                capture_output=True,
-                timeout=10
-            )
-            tprint(f"[WEB_EXEC] Opened {final_url} in default browser")
-        except subprocess.TimeoutExpired:
-            raise WebExecutionError(
-                code="WEB_OPEN_TIMEOUT",
-                message=f"Timeout opening URL: {final_url}"
-            )
-        except subprocess.CalledProcessError as exc:
-            raise WebExecutionError(
-                code="WEB_OPEN_FAILED",
-                message=f"Failed to open URL: {exc.stderr.decode() if exc.stderr else str(exc)}"
-            )
+        if step.get("defer_open"):
+            self._page.goto(final_url, wait_until="domcontentloaded")
+            try:
+                self._page.wait_for_load_state("domcontentloaded", timeout=4000)
+            except Exception:
+                pass
+            self._defer_open_default = True
+            self._pending_search_text = None
+            self._last_open_url = final_url
+            tprint(f"[WEB_EXEC] Deferred open for {final_url}")
+        else:
+            self._open_default_browser(final_url)
 
         # Store metadata for ExecutionResult enrichment
         self._last_resolution = result
@@ -192,11 +288,32 @@ class WebExecutor:
         if is_deep_logging():
             deep_log(f"[DEEP][WEB_EXEC] type_text text={text!r} selector={selector!r}")
         if selector:
-            el = self._page.wait_for_selector(selector, timeout=10000)
-            el.click()
-            el.type(text)
-        else:
-            self._page.keyboard.type(text)
+            try:
+                el = self._page.wait_for_selector(selector, timeout=8000)
+                el.click()
+                el.type(text)
+                self._pending_search_text = text
+                return
+            except Exception:
+                pass
+        for fallback in (
+            'input[type="search"]',
+            'input[name*="search" i]',
+            'input[name="q"]',
+            'input[aria-label*="search" i]',
+            'input[placeholder*="search" i]',
+            'input[id*="search" i]',
+        ):
+            try:
+                el = self._page.wait_for_selector(fallback, timeout=4000)
+                el.click()
+                el.type(text)
+                self._pending_search_text = text
+                return
+            except Exception:
+                continue
+        self._pending_search_text = text
+        self._page.keyboard.type(text)
 
     def _handle_key_combo(self, step: dict) -> None:
         keys = step.get("keys", [])
@@ -205,6 +322,24 @@ class WebExecutor:
         pw_keys = [self._to_playwright_key(k) for k in keys]
         combo = "+".join(pw_keys)
         self._page.keyboard.press(combo)
+        if self._defer_open_default and any(k.lower() in {"enter", "return"} for k in keys):
+            before = self._page.url
+            try:
+                self._page.wait_for_load_state("domcontentloaded", timeout=4000)
+            except Exception:
+                pass
+            after = self._page.url
+            if after and after != before:
+                self._open_default_browser(after)
+                self._defer_open_default = False
+                return
+            if self._pending_search_text and self._last_open_url:
+                if self._try_search_url_patterns(self._last_open_url, self._pending_search_text):
+                    self._defer_open_default = False
+                    return
+            if self._last_open_url:
+                self._open_default_browser(self._last_open_url)
+            self._defer_open_default = False
 
     def _handle_click(self, step: dict) -> None:
         selector = step.get("selector")
@@ -229,6 +364,45 @@ class WebExecutor:
         if is_deep_logging():
             deep_log(f"[DEEP][WEB_EXEC] scroll direction={direction} amount={amount}")
         self._page.mouse.wheel(0, delta)
+
+    def flush_deferred_open(self) -> None:
+        if not self._defer_open_default:
+            if self._fallback_base_url:
+                self._open_default_browser(self._fallback_base_url)
+                self._fallback_base_url = None
+            return
+        if self._page and self._page.url:
+            self._open_default_browser(self._page.url)
+        elif self._last_open_url:
+            self._open_default_browser(self._last_open_url)
+        self._defer_open_default = False
+
+    def _open_default_browser(self, url: str) -> None:
+        if not url:
+            return
+        try:
+            subprocess.run(
+                ["open", "--", url],
+                check=True,
+                capture_output=True,
+                timeout=10
+            )
+            tprint(f"[WEB_EXEC] Opened {url} in default browser")
+        except subprocess.TimeoutExpired:
+            raise WebExecutionError(
+                code="WEB_OPEN_TIMEOUT",
+                message=f"Timeout opening URL: {url}"
+            )
+        except subprocess.CalledProcessError as exc:
+            raise WebExecutionError(
+                code="WEB_OPEN_FAILED",
+                message=f"Failed to open URL: {exc.stderr.decode() if exc.stderr else str(exc)}"
+            )
+        finally:
+            self._pending_search_text = None
+            self._last_open_url = None
+            self._fallback_search_text = None
+            self._fallback_base_url = None
 
     @staticmethod
     def _to_playwright_key(key: str) -> str:
@@ -416,22 +590,110 @@ class WebExecutor:
 
         return True
 
+    @staticmethod
+    def _is_absolute_url(url: str | None) -> bool:
+        if not url:
+            return False
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return False
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+    def _try_search_url_patterns(self, base_url: str, query: str) -> bool:
+        """Try common search URL patterns and open the first that loads."""
+        if not base_url or not query:
+            return False
+        parsed = urlparse(base_url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        encoded = quote_plus(query)
+        patterns = [
+            f"{origin}/search?q={encoded}",
+            f"{origin}/search?query={encoded}",
+            f"{origin}/search?term={encoded}",
+            f"{origin}/results?search_query={encoded}",
+            f"{origin}/results?q={encoded}",
+            f"{origin}/?q={encoded}",
+            f"{origin}/?query={encoded}",
+        ]
+        for candidate in patterns:
+            try:
+                if is_deep_logging():
+                    deep_log(f"[DEEP][WEB_EXEC] try search url={candidate}")
+                self._page.goto(candidate, wait_until="domcontentloaded", timeout=8000)
+                self._open_default_browser(candidate)
+                return True
+            except Exception:
+                continue
+        return False
+
+    def _handle_web_fallback(self, step: dict) -> None:
+        """Fallback flow when Playwright is unavailable."""
+        intent = step.get("intent")
+        if intent == "open_url":
+            url = str(step.get("url", "")).strip()
+            if not url:
+                return
+            if step.get("defer_open"):
+                self._fallback_base_url = url
+                return
+            self._open_default_browser(url)
+            return
+        if intent == "type_text":
+            text = str(step.get("text", "")).strip()
+            if text:
+                self._fallback_search_text = text
+            return
+        if intent == "key_combo":
+            keys = step.get("keys") or []
+            keys_lower = {str(k).lower() for k in keys}
+            if "enter" not in keys_lower and "return" not in keys_lower:
+                return
+            base_url = self._fallback_base_url
+            query = self._fallback_search_text
+            if base_url and query:
+                search_url = self._build_search_url(base_url, query)
+                if search_url:
+                    self._open_default_browser(search_url)
+                    return
+            if base_url:
+                self._open_default_browser(base_url)
+            return
+
+    @staticmethod
+    def _build_search_url(base_url: str, query: str) -> str | None:
+        if not base_url or not query:
+            return None
+        parsed = urlparse(base_url)
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        encoded = quote_plus(query)
+        candidates = [
+            f"{origin}/search?q={encoded}",
+            f"{origin}/search?query={encoded}",
+            f"{origin}/search?term={encoded}",
+            f"{origin}/results?search_query={encoded}",
+            f"{origin}/results?q={encoded}",
+            f"{origin}/?q={encoded}",
+            f"{origin}/?query={encoded}",
+        ]
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def _build_search_candidates(base_url: str, query: str) -> str | None:
+        """Return the most likely search URL for a base origin."""
+        return WebExecutor._build_search_url(base_url, query)
+
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
     def shutdown(self) -> None:
         """Close browser, Playwright, and URL resolver."""
-        if self._browser:
-            try:
-                self._browser.close()
-            except Exception:
-                pass
-        if self._playwright:
-            try:
-                self._playwright.stop()
-            except Exception:
-                pass
+        self._shutdown_browser()
 
         # Cleanup URL resolver
         if self._url_resolver:
@@ -440,10 +702,71 @@ class WebExecutor:
             except Exception:
                 pass
 
-        self._initialized = False
-        self._browser = None
-        self._page = None
-        self._playwright = None
         self._url_resolver = None
         self._fallback_chain = None
         self._last_resolution = None
+
+    def warmup_for_steps(self, steps: list[dict]) -> None:
+        """Warm the Playwright browser for web intents without navigation."""
+        if not any(
+            (step.get("target") == "web")
+            or str(step.get("intent", "")).startswith("web_")
+            for step in steps
+        ):
+            return
+        self._ensure_browser()
+        tprint("[WEB_EXEC] Warmed browser for web intents")
+
+    def resolve_web_steps(self, steps: list[dict]) -> dict:
+        """Resolve a web command into a direct URL for instant execution."""
+        open_step = None
+        query_step = None
+        key_step = None
+        for step in steps:
+            if step.get("intent") == "open_url" and (
+                step.get("target") in (None, "web")
+            ):
+                open_step = step
+            elif step.get("intent") == "type_text" and (
+                step.get("target") in (None, "web")
+            ):
+                query_step = step
+            elif step.get("intent") == "key_combo" and (
+                step.get("target") in (None, "web")
+            ):
+                key_step = step
+
+        if not open_step or not query_step or not key_step:
+            return {}
+
+        url = str(open_step.get("url") or "").strip()
+        query = str(query_step.get("text") or "").strip()
+        if not url or not query:
+            return {}
+
+        try:
+            self._ensure_browser()
+        except Exception as exc:
+            tprint(f"[WEB_EXEC] Resolve warm-up failed: {exc}")
+            return {}
+
+        try:
+            self._page.goto(url, wait_until="domcontentloaded")
+            try:
+                self._page.wait_for_load_state("domcontentloaded", timeout=4000)
+            except Exception:
+                pass
+            base_url = self._page.url or url
+        except Exception as exc:
+            tprint(f"[WEB_EXEC] Resolve navigation failed: {exc}")
+            return {}
+
+        search_url = self._build_search_candidates(base_url, query)
+        if not search_url:
+            return {}
+
+        return {
+            "resolved_url": search_url,
+            "base_url": base_url,
+            "query": query,
+        }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from utils.log_utils import tprint
 
 
 class WebExecutionError(RuntimeError):
@@ -76,6 +77,13 @@ def validate_step(step: dict) -> dict:
         if not url:
             raise ValueError("open_url requires 'url'")
         cleaned["url"] = url
+        resolved_url = step.get("resolved_url")
+        if isinstance(resolved_url, str) and resolved_url.strip():
+            cleaned["resolved_url"] = resolved_url.strip()
+        if "precomputed" in step:
+            cleaned["precomputed"] = bool(step.get("precomputed"))
+        if "defer_open" in step:
+            cleaned["defer_open"] = bool(step.get("defer_open"))
         return cleaned
 
     if intent == "wait_for_url":
@@ -266,7 +274,16 @@ def validate_step(step: dict) -> dict:
 
 def validate_steps(steps: list[dict]) -> list[dict]:
     """Validate a list of steps and return sanitized copies."""
-    return [validate_step(step) for step in steps]
+    cleaned_steps: list[dict] = []
+    for step in steps:
+        intent = str(step.get("intent", "")).strip()
+        if intent == "type_text":
+            text = step.get("text")
+            if text is None or str(text).strip() == "":
+                tprint("[INTENTS] Dropping type_text step with empty text")
+                continue
+        cleaned_steps.append(validate_step(step))
+    return cleaned_steps
 
 
 def _clean_selector(selector: dict) -> dict:

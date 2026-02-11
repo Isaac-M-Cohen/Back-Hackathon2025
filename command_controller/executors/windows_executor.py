@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 
 from command_controller.executors.base import BaseExecutor, ExecutionResult
+from command_controller.web_constants import COMMON_DOMAINS
 from utils.settings_store import deep_log, is_deep_logging
 
 
@@ -27,7 +29,14 @@ class WindowsExecutor(BaseExecutor):
                 app = str(step.get("app", "")).strip()
                 if not app:
                     return self._failed(intent, target, "missing app", start)
-                self._start(app)
+                if self._app_available(app):
+                    self._start(app)
+                else:
+                    url = self._app_to_url(app)
+                    if url:
+                        self._start(url)
+                    else:
+                        return self._failed(intent, target, "app not found", start)
                 return self._ok(intent, target, start)
 
             if intent == "open_file":
@@ -54,6 +63,37 @@ class WindowsExecutor(BaseExecutor):
             shell=True,
         )
 
+    def _app_available(self, app: str) -> bool:
+        query = app.replace("'", "''")
+        cmd = (
+            "powershell -NoProfile -Command "
+            "\"$m=(Get-StartApps | Where-Object { $_.Name -like '*"
+            + query
+            + "*' }); if($m){exit 0}else{exit 1}\""
+        )
+        try:
+            subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+                shell=True,
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+    def _app_to_url(self, app: str) -> str | None:
+        key = app.strip().lower()
+        if key in COMMON_DOMAINS:
+            return f"https://{COMMON_DOMAINS[key]}"
+        if " " in key:
+            return None
+        slug = re.sub(r"[^a-z0-9]+", "", key)
+        if not slug:
+            return None
+        return f"https://{slug}.com"
+
     def _ok(self, intent: str, target: str, start: float) -> ExecutionResult:
         elapsed_ms = int((time.monotonic() - start) * 1000)
         return ExecutionResult(intent=intent, status="ok", target=target, elapsed_ms=elapsed_ms)
@@ -77,4 +117,3 @@ class WindowsExecutor(BaseExecutor):
             details={"reason": reason},
             elapsed_ms=elapsed_ms,
         )
-

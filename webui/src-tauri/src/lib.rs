@@ -188,15 +188,9 @@ fn spawn_backend(app: &tauri::App<Wry>) -> Result<(String, Child), Box<dyn std::
             .join("..")
             .join("..");
         let mut cmd = Command::new(python);
-        cmd.args([
-                "-m",
-                "uvicorn",
-                "api.server:app",
-                "--host",
-                host,
-                "--port",
-                &port.to_string(),
-            ])
+        cmd.args(["-m", "scripts.tauri_backend"])
+            .env("EASY_API_HOST", host)
+            .env("EASY_API_PORT", port.to_string())
             .current_dir(repo_root)
             .stdin(Stdio::null());
 

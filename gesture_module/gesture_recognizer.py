@@ -159,6 +159,7 @@ class RealTimeGestureRecognizer:
         self._closed = False
         self._last_emitted_label: str | None = None
         self._last_emit_time: float = 0.0
+        self._last_seen_label: str = "NONE"
         self._last_frame_ts: float = 0.0
         deep_log(
             "[DEEP][GESTURE] init "
@@ -293,7 +294,11 @@ class RealTimeGestureRecognizer:
                 if emit_label != "NONE":
                     now = time.monotonic()
                     in_cooldown = (now - self._last_emit_time) < self.emit_cooldown_secs
-                    if (emit_label != self._last_emitted_label) and not in_cooldown:
+                    should_emit = (
+                        emit_label != self._last_emitted_label
+                        or self._last_seen_label == "NONE"
+                    )
+                    if (not in_cooldown) and should_emit:
                         if is_deep_logging():
                             deep_log(
                                 "[DEEP][GESTURE] emit "
@@ -307,8 +312,7 @@ class RealTimeGestureRecognizer:
                             )
                         self._last_emitted_label = emit_label
                         self._last_emit_time = now
-                # Don't reset _last_emitted_label on NONE - this ensures the same
-                # gesture won't re-emit until a DIFFERENT gesture is detected first
+                self._last_seen_label = emit_label
                 if self.on_detection:
                     try:
                         # Report only enabled labels (or NONE) for UI status.

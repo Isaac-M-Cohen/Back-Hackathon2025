@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 
 from command_controller.executors.base import BaseExecutor, ExecutionResult
+from command_controller.web_constants import COMMON_DOMAINS
 from utils.log_utils import tprint
 from utils.settings_store import deep_log, get_settings, is_deep_logging
 
@@ -76,11 +78,26 @@ class MacOSExecutor(BaseExecutor):
     def _open_app(self, app: str) -> None:
         if is_deep_logging():
             deep_log(f"[DEEP][MAC_EXEC] open_app app={app}")
-        subprocess.Popen(
-            ["open", "-a", app],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        try:
+            subprocess.run(
+                ["open", "-Ra", app],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            subprocess.Popen(
+                ["open", "-a", app],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            url = self._app_to_url(app)
+            if url:
+                if is_deep_logging():
+                    deep_log(f"[DEEP][MAC_EXEC] open_app fallback url={url}")
+                self._open_url(url)
+                return
+            raise
 
     def _open_file(self, path: str) -> None:
         if is_deep_logging():
@@ -90,6 +107,17 @@ class MacOSExecutor(BaseExecutor):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+
+    def _app_to_url(self, app: str) -> str | None:
+        key = app.strip().lower()
+        if key in COMMON_DOMAINS:
+            return f"https://{COMMON_DOMAINS[key]}"
+        if " " in key:
+            return None
+        slug = re.sub(r"[^a-z0-9]+", "", key)
+        if not slug:
+            return None
+        return f"https://{slug}.com"
 
     def _hotkey(self, keys: list[str]) -> None:
         normalized = self._normalize_keys(keys)

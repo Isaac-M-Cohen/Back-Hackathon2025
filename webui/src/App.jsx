@@ -1150,7 +1150,7 @@ function CommandModal({
           </button>
         </div>
         {isSaving && (
-          <div className="absolute inset-0 bg-surface-elevated/80 flex items-center justify-center rounded-2xl">
+          <div className="absolute inset-0 bg-white/90 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-2xl">
             <div className="text-sm text-content-secondary">
               Interpreting command...
             </div>
