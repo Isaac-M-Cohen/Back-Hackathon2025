@@ -4,6 +4,8 @@
   "language": "en",
   "log_level": "DEEP",
   "log_level_comment": "Levels: ERROR, WARN, INFO, DEBUG, DEEP (most verbose).",
+  "http_access_log": false,
+  "http_access_log_comment": "Enable uvicorn request logs (GET /... 200).",
   "auto_start": false,
   "ui_poll_interval_ms": 500,
   "recognition_confidence_threshold": 0.9,
@@ -29,4 +31,7 @@
   "speaker_device_index": null
   ,
   "playwright_headless": true
+  ,
+  "playwright_resolver_profile": "./data/browser_profiles/login_resolver",
+  "playwright_resolver_profile_comment": "Profile directory for headless URL resolver."
 }

@@ -275,6 +275,15 @@ def set_gesture_command(req: SetGestureCommandRequest):
         if steps and cached_resolved:
             if is_deep_logging():
                 tprint(f"[DEEP][API] reuse_cached_resolved label={req.label!r}")
+
+        # Detect login intent for precompute
+        is_login_intent = any(
+            term in req.command.lower()
+            for term in ("login", "log in", "sign in", "sign-in", "signin", "account")
+        )
+        if is_login_intent:
+            tprint(f"[API] Login intent detected for command: {req.command}")
+
         if steps is None:
             try:
                 settings = get_settings()
@@ -296,23 +305,76 @@ def set_gesture_command(req: SetGestureCommandRequest):
                 raise HTTPException(status_code=400, detail=f"Command parsing failed: {exc}")
         resolved = {}
         if not cached_resolved:
-            try:
-                settings = get_settings()
-                timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        controller.engine.executor.resolve_web_steps,
-                        steps,
-                    )
-                    resolved = future.result(timeout=timeout_secs)
-            except concurrent.futures.TimeoutError:
-                tprint(f"[API] Resolve steps timed out for {req.label!r}")
-                resolved = {}
-            except Exception as exc:
-                tprint(f"[API] Resolve steps failed for {req.label!r}: {exc}")
-                resolved = {}
+            # Extract base URL from steps for login precompute logging
+            base_url = None
+            raw_base_url = None
+            for step in steps:
+                if step.get("intent") == "open_url":
+                    raw_base_url = step.get("url")
+                    base_url = raw_base_url
+                    break
+
+            if is_login_intent and base_url:
+                base_url = _normalize_login_base_url(base_url)
+                tprint(f"[API] Precomputing login URL for base: {base_url}")
+                # Use specialized login link search for login intents
+                try:
+                    subjects = _extract_subjects(req.command)
+                    subject = None
+                    if subjects:
+                        candidate = subjects[0].strip().lower()
+                        if not any(token in candidate for token in (":", "/", "http")):
+                            subject = candidate
+                    if subject is None and base_url:
+                        subject = _subject_from_base_url(base_url)
+                    login_query = req.command
+                    if subject:
+                        login_query = f"{subject} login"
+                        tprint(f"[API] Login subject detected: {subject}")
+                    settings = get_settings()
+                    timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            _resolve_login_url_with_resolver, login_query
+                        )
+                        login_url = future.result(timeout=timeout_secs)
+                    if login_url:
+                        tprint(f"[API] Login URL resolved: {login_url}")
+                        resolved = {
+                            "resolved_url": login_url,
+                            "base_url": base_url,
+                            "query": login_query,
+                        }
+                    else:
+                        tprint(f"[API] Login URL resolution returned no result, keeping original steps")
+                        resolved = {}
+                except concurrent.futures.TimeoutError:
+                    tprint(f"[API] Login URL resolution timed out for {base_url}")
+                    resolved = {}
+                except Exception as exc:
+                    tprint(f"[API] Login URL resolution failed for {base_url}: {exc}")
+                    resolved = {}
+            else:
+                # Non-login intent: use standard resolution
+                try:
+                    settings = get_settings()
+                    timeout_secs = float(settings.get("command_parse_timeout_secs", 15))
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            controller.engine.executor.resolve_web_steps,
+                            steps,
+                        )
+                        resolved = future.result(timeout=timeout_secs)
+                except concurrent.futures.TimeoutError:
+                    tprint(f"[API] Resolve steps timed out for {req.label!r}")
+                    resolved = {}
+                except Exception as exc:
+                    tprint(f"[API] Resolve steps failed for {req.label!r}: {exc}")
+                    resolved = {}
 
         if resolved.get("resolved_url"):
+            if is_login_intent:
+                tprint(f"[API] Login URL precomputed: {resolved['resolved_url']}")
             steps = [
                 {
                     "intent": "open_url",
@@ -322,6 +384,10 @@ def set_gesture_command(req: SetGestureCommandRequest):
                     "precomputed": True,
                 }
             ]
+        elif is_login_intent and raw_base_url:
+            tprint(
+                f"[API] Login URL precompute failed, using fallback: {raw_base_url}"
+            )
 
         if is_deep_logging():
             tprint(f"[DEEP][API] parsed_steps label={req.label!r} steps={steps}")
@@ -349,6 +415,23 @@ def set_gesture_command(req: SetGestureCommandRequest):
         workflow.dataset.set_command_steps(req.label, None)
         controller.dataset.set_command_steps(req.label, None)
     return {"status": "ok"}
+
+def _resolve_login_url_with_resolver(query: str) -> str | None:
+    """Use URLResolver to find login page from a query string."""
+    try:
+        from command_controller.url_resolver import URLResolver
+
+        resolver = URLResolver()
+        result = resolver.resolve(query)
+        resolver.shutdown()
+        if result and result.resolved_url:
+            return result.resolved_url
+        return None
+
+    except Exception as exc:
+        tprint(f"[API] Login URL resolution with URLResolver failed: {exc}")
+        return None
+
 
 @app.post("/train")
 def train():
@@ -424,6 +507,35 @@ def _extract_subjects(text: str) -> list[str]:
     groups = subject_extractor.extract(text, steps)
     ordered = sorted(groups, key=lambda group: group.start_index)
     return [group.subject_name for group in ordered if group.subject_name]
+
+
+def _subject_from_base_url(base_url: str) -> str | None:
+    try:
+        from urllib.parse import urlparse
+
+        host = urlparse(base_url).hostname or ""
+        host = host.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        parts = [part for part in host.split(".") if part]
+        if len(parts) >= 2:
+            return parts[-2]
+        return parts[0] if parts else None
+    except Exception:
+        return None
+
+
+def _normalize_login_base_url(base_url: str) -> str:
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        path_lower = (parsed.path or "").lower()
+        if any(term in path_lower for term in ("login", "signin", "sign-in", "auth")):
+            return f"{parsed.scheme}://{parsed.netloc}/"
+    except Exception:
+        return base_url
+    return base_url
 
 
 def _update_voice_state(**updates: Any) -> None:
@@ -605,4 +717,16 @@ def deny_command(req: CommandConfirmationRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api.server:app", host="0.0.0.0", port=8000, reload=True)
+    settings = get_settings()
+    access_log = bool(settings.get("http_access_log", False))
+    log_level = str(settings.get("log_level", "INFO")).upper()
+    if log_level == "DEEP":
+        log_level = "DEBUG"
+    uvicorn.run(
+        "api.server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level=log_level.lower(),
+        access_log=access_log,
+    )

@@ -195,11 +195,25 @@ class WebExecutor:
         settings = get_settings()
 
         if resolved_url:
+            if step.get("precomputed"):
+                tprint(f"[WEB_EXEC] Using precomputed URL: {resolved_url}")
             if settings.get("request_before_open_url", False):
                 tprint(f"[WEB_EXEC] Opening URL in default browser: {resolved_url}")
-            self._open_default_browser(resolved_url)
-            self._last_open_url = resolved_url
-            return
+            try:
+                self._open_default_browser(resolved_url)
+                self._last_open_url = resolved_url
+                return
+            except WebExecutionError as exc:
+                # Fallback: if precomputed URL fails, try original URL
+                tprint(f"[WEB_EXEC] Precomputed URL failed ({exc.code}), falling back to original URL: {url}")
+                if url and url != resolved_url:
+                    try:
+                        self._open_default_browser(url)
+                        self._last_open_url = url
+                        return
+                    except WebExecutionError:
+                        pass
+                raise
 
         # Check if enhanced web flow is enabled
         if not settings.get("use_playwright_for_web", True):
@@ -214,6 +228,8 @@ class WebExecutor:
         # Enhanced path: URL resolution + fallback
         if is_deep_logging():
             deep_log(f"[DEEP][WEB_EXEC] Enhanced path: resolving url={url}")
+        else:
+            tprint("[WEB_EXEC] No precomputed URL, resolving dynamically")
 
         result = None
         final_url = None
@@ -224,6 +240,7 @@ class WebExecutor:
             result = fallback_chain.execute(url)
 
             if result.status == "all_failed":
+                tprint("[WEB_EXEC] Precomputed URL failed, falling back to resolution")
                 raise WebExecutionError(
                     code="WEB_RESOLUTION_FAILED",
                     message=f"Failed to resolve URL: {url}",

@@ -7,11 +7,12 @@
     <list default="true" id="9177b963-cf03-4569-ab04-4a6d4093da51" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/command_controller/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/executor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/command_controller/intents.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/intents.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/command_controller/url_resolver.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/url_resolver.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/command_controller/web_executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/command_controller/web_executor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/video_module/gesture_ml.py" beforeDir="false" afterPath="$PROJECT_DIR$/video_module/gesture_ml.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/tauri.build.conf.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/app_settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/config/app_settings.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/tauri_backend.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/tauri_backend.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/webui/src-tauri/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/webui/src-tauri/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -199,7 +200,7 @@
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$Back_Hackathon2025_bundling.coverage" NAME="Back-Hackathon2025-bundling Coverage Results" MODIFIED="1770277713063" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/../Back-Hackathon2025-bundling" />
     <SUITE FILE_PATH="coverage/HackathonProject2025$logger.coverage" NAME="logger Coverage Results" MODIFIED="1764910436513" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$controller.coverage" NAME="controller Coverage Results" MODIFIED="1765140750267" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/command_controller" />
-    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="Back-Hackathon2025 Coverage Results" MODIFIED="1770744509894" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Back_Hackathon2025$NativeWindow.coverage" NAME="Back-Hackathon2025 Coverage Results" MODIFIED="1770802995850" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$stt_engine.coverage" NAME="stt_engine Coverage Results" MODIFIED="1765198274346" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/voice_module" />
     <SUITE FILE_PATH="coverage/Back_Hackathon2025$Backend.coverage" NAME="Backend Coverage Results" MODIFIED="1766531719087" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
