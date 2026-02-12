@@ -96,6 +96,7 @@ function GestureControlApp() {
   const [commandModal, setCommandModal] = useState(null);
   const [isSavingCommand, setIsSavingCommand] = useState(false);
   const [commandModalError, setCommandModalError] = useState("");
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const settingsOpenRef = useRef(false);
   const lastSettingsOpenAtRef = useRef(0);
 
@@ -225,6 +226,36 @@ function GestureControlApp() {
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (
+        showPresets ||
+        commandModal ||
+        showSettings ||
+        pendingCommands.length > 0 ||
+        showExitConfirm
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setShowExitConfirm(true);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    commandModal,
+    pendingCommands.length,
+    showExitConfirm,
+    showPresets,
+    showSettings,
+  ]);
 
   useEffect(() => {
     if (!isGestureRunning) {
@@ -881,6 +912,25 @@ function GestureControlApp() {
           }}
         />
       )}
+      {showExitConfirm && (
+        <ExitConfirmModal
+          onCancel={() => setShowExitConfirm(false)}
+          onConfirm={async () => {
+            setShowExitConfirm(false);
+            try {
+              const { getCurrentWebviewWindow } = await import(
+                "@tauri-apps/api/webviewWindow"
+              );
+              const win = getCurrentWebviewWindow();
+              await win.close();
+            } catch {
+              if (typeof window !== "undefined") {
+                window.close();
+              }
+            }
+          }}
+        />
+      )}
       </div>
     </div>
   );
@@ -1056,6 +1106,20 @@ function SettingsWindow() {
 }
 
 function PresetModal({ presets, onSelect, onClose }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-8 z-50">
       <div className="bg-surface-elevated rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -1103,6 +1167,28 @@ function CommandModal({
     mode === "edit" && trimmed === originalValue.trim();
   const isDisabled = !trimmed || isUnchanged || isSaving;
   const title = mode === "edit" ? "Edit Command" : "Add Command";
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key === "Enter") {
+        if (isDisabled) {
+          return;
+        }
+        event.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDisabled, onCancel, onConfirm]);
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-8 z-50">
       <div className="relative bg-surface-elevated rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -1123,6 +1209,7 @@ function CommandModal({
           className="w-full border border-line rounded-lg px-3 py-2 text-sm text-content-primary bg-surface-input focus:outline-none focus:ring-2 focus:ring-accent"
           placeholder="Describe the action to run"
           disabled={isSaving}
+          autoFocus
         />
         {error && (
           <div className="mt-3 text-sm text-status-error-text">
@@ -1163,6 +1250,25 @@ function CommandModal({
 
 
 function CommandConfirmModal({ item, onApprove, onDeny }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDeny();
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onApprove();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onApprove, onDeny]);
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
       <div className="bg-surface-elevated rounded-2xl shadow-lg border border-line w-full max-w-md p-6">
@@ -1190,6 +1296,54 @@ function CommandConfirmModal({ item, onApprove, onDeny }) {
             className="flex-1 py-2 px-4 bg-accent text-content-onaccent rounded-lg hover:bg-accent-hover transition-colors"
           >
             Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExitConfirmModal({ onCancel, onConfirm }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, onConfirm]);
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
+      <div className="bg-surface-elevated rounded-2xl shadow-lg border border-line w-full max-w-md p-6">
+        <h2 className="text-lg font-medium text-content-primary mb-2">
+          Close App?
+        </h2>
+        <p className="text-sm text-content-secondary mb-4">
+          Are you sure you want to close the main window?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2 px-4 bg-btn-secondary text-btn-secondary-text rounded-lg hover:bg-btn-secondary-hover transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2 px-4 bg-accent text-content-onaccent rounded-lg hover:bg-accent-hover transition-colors"
+          >
+            Close
           </button>
         </div>
       </div>
