@@ -29,6 +29,32 @@ export default function SettingsModal({
     };
   }, []);
 
+  useEffect(() => {
+    const shouldListen = variant === "window" || isOpen;
+    if (!shouldListen) {
+      return undefined;
+    }
+    const handleKeyDown = (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (variant !== "window" && !ready) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onSave();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose, onSave, ready, variant]);
+
   const handleCancel = (event) => {
     event.stopPropagation();
     if (!ready) return;
