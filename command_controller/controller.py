@@ -84,7 +84,8 @@ class CommandController:
                 return
         else:
             text = action
-        read_selection = not self._is_basic_shortcut(text)
+        # For voice input, avoid reading selection to prevent log/context pollution.
+        read_selection = source != "voice" and not self._is_basic_shortcut(text)
         context = get_context(read_selection=read_selection)
         deep_log(
             "[DEEP][CTRL] run_llm "

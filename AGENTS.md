@@ -15,7 +15,7 @@ be the single source of context when resetting a session.
 - `command_controller/`: command routing (`controller.py`), execution (`executor.py` placeholder), logging (`logger.py`).
 - `gesture_module/`: realtime recognizer (`gesture_recognizer.py`), workflow wrapper (`workflow.py`), basic tracking (`hand_tracking.py`).
 - `video_module/gesture_ml.py`: dataset + sample collection for TFLite keypoint/point-history classifiers.
-- `voice_module/`: mic listener (`voice_listener.py`), STT engine (`stt_engine.py`), local Whisper backend.
+- `voice_module/`: WAV-based mic recorder with silence detection (`voice_listener.py`), STT engine (`stt_engine.py`), local faster-whisper backend (`stt_whisper_local.py`). No cloud APIs or API keys required.
 - `api/server.py`: FastAPI endpoints used by the React UI.
 - `webui/`: React + Vite UI (`webui/src/App.jsx`, `webui/src/api.js`).
 - `config/`: JSON configs for gestures, voice, app settings, and command mapping.
@@ -40,15 +40,18 @@ be the single source of context when resetting a session.
   - `cd webui && npm install && npm run dev`
 
 ## Environment variables
-- `STT_PROVIDER` can be `whisper-local`.
-- `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`, `LOCAL_WHISPER_COMPUTE_TYPE`, `LOCAL_WHISPER_LANGUAGE` for local Whisper.
+- `STT_PROVIDER` = `whisper-local` (only supported option, no cloud/API keys required).
+- `LOCAL_WHISPER_MODEL_PATH` = model name or path (default: "small").
+- `LOCAL_WHISPER_DEVICE` = "cpu" or "cuda" for GPU acceleration.
+- `LOCAL_WHISPER_COMPUTE_TYPE` = "int8" (default) or "float16"/"float32".
+- `LOCAL_WHISPER_LANGUAGE` = language code (default: "en").
 - `GESTURE_USER_ID` to select a user profile.
 - `ENABLE_VOICE=0` to disable voice in the backend (API/sidecar).
 
 ## Core flows (high level)
 - Gesture training (desktop or web UI): collect static/dynamic samples to CSVs, then train TFLite models via notebooks.
 - Gesture recognition (desktop or web UI): open camera, recognize labels, emit `CommandController.handle_event`.
-- Voice recognition: mic audio is streamed to STT provider, transcript is forwarded to `CommandController.handle_event`.
+- Voice recognition: WAV-based pipeline records mic audio with silence detection, normalizes audio, then transcribes locally using faster-whisper. Transcript is forwarded to `CommandController.handle_event`.
 
 ## Gesture ML pipeline (details)
 - Input features: 21 hand landmarks (x,y) = 42 values for static sign classification.
