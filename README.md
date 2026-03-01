@@ -11,7 +11,7 @@ This project delivers a Windows-first desktop application (macOS supported for l
 - Execute OS actions via PyAutoGUI with confirmation for sensitive commands.
 - Manage settings and workflows through a React UI embedded in a Tauri shell.
 
-The system is fully local by default: TFLite runs on-device for gesture inference, and command parsing uses a local LLM (Ollama). Voice recognition supports cloud or local backends depending on configuration.
+The system is fully local by default: TFLite runs on-device for gesture inference, and command parsing uses a local LLM (Ollama). Voice recognition uses local-only faster-whisper (no API keys or cloud services required).
 
 ## Architecture (Mermaid)
 
@@ -82,8 +82,8 @@ flowchart TB
   %% Voice Pipeline
   %% =========================
   subgraph Voice["Voice Pipeline (optional)"]
-    vlisten["VoiceListener\n(voice_module/voice_listener.py)\nmic stream"]
-    stt["STT Engine\n(voice_module/stt_engine.py)\nLocal Whisper only"]
+    vlisten["VoiceListener\n(voice_module/voice_listener.py)\nWAV-based recording"]
+    stt["STT Engine\n(voice_module/stt_engine.py)\nLocal faster-whisper"]
     mic["Microphone"]
     transcript["Transcript text"]
   end
@@ -168,63 +168,6 @@ flowchart TB
 - Command execution: LLM interprets intents -> Executor runs hotkeys, typing, apps, URLs.
 - Confirmation loop: Engine queues sensitive commands -> UI polls `/commands/pending`.
 
-## Quickstart
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- Playwright Chromium
-
-### 5-Step Setup
-
-1. **Install Python dependencies**
-   ```bash
-   pip install -e .
-   ```
-
-2. **Install Playwright browsers**
-   ```bash
-   playwright install chromium
-   ```
-
-3. **Install Node dependencies**
-   ```bash
-   cd webui && npm install && cd ..
-   ```
-
-4. **Configure settings** (optional)
-   ```bash
-   # Edit config/app_settings.json to customize
-   # Defaults work out-of-box
-   ```
-
-5. **Run the application**
-   ```bash
-   python main.py
-   # Opens Tauri desktop app with gesture/voice control
-   ```
-
-### Verify Installation
-
-Test URL resolution:
-```bash
-python -c "
-from command_controller.url_resolver import URLResolver
-resolver = URLResolver()
-result = resolver.resolve('youtube cats')
-print(f'Status: {result.status}')
-print(f'URL: {result.resolved_url}')
-resolver.shutdown()
-"
-```
-
-Expected output:
-```
-Status: ok
-URL: https://www.youtube.com/results?search_query=cats
-```
-
 ## Run (dev)
 
 - Desktop app:
@@ -238,54 +181,24 @@ URL: https://www.youtube.com/results?search_query=cats
 ## Environment
 
 Common settings:
-- `STT_PROVIDER` = `whisper-local`.
-- `LOCAL_WHISPER_MODEL_PATH`, `LOCAL_WHISPER_DEVICE`.
+- `STT_PROVIDER` = `whisper-local` (only supported option, no cloud/API keys required).
+- `LOCAL_WHISPER_MODEL_PATH` = model name or path (default: "small").
+- `LOCAL_WHISPER_DEVICE` = "cpu" or "cuda" for GPU acceleration.
+- `LOCAL_WHISPER_LANGUAGE` = language code (default: "en").
 - `GESTURE_USER_ID` for per-user datasets.
 - `ENABLE_VOICE=0` to disable voice features.
 
-## New: Web Executor System
-
-The latest release includes an intelligent URL resolution system that transforms simple queries into fully resolved URLs:
-
-### Features
-
-- **Smart Resolution:** "youtube cats" → navigates to YouTube search results
-- **Fallback Chain:** Tries resolution → search engine → homepage
-- **Caching:** 15-minute cache with LRU eviction for fast repeated queries
-- **Security:** Separate browser profiles, URL validation, configurable permissions
-- **Performance:** Browser warm-up, page reuse, DOM search optimization
-
-### Quick Example
-
-```python
-# User says: "open youtube cats"
-# System:
-# 1. Resolves to: https://www.youtube.com/results?search_query=cats
-# 2. Opens in Safari/Chrome (default browser)
-# 3. Caches result for 15 minutes
-```
-
-### Configuration
-
-Enable/disable features in `config/app_settings.json`:
-
-```json
-{
-  "use_playwright_for_web": true,        // Enhanced resolution
-  "enable_search_fallback": true,        // Fallback to search
-  "enable_homepage_fallback": true,      // Fallback to homepage
-  "warmup_url_resolver": true            // Pre-initialize browser
-}
-```
-
-### Documentation
-
-- **Complete Guide:** [`docs/WEB_EXECUTOR.md`](docs/WEB_EXECUTOR.md)
-- **Configuration Reference:** [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
-- **Security Audit:** [`security_notes.md`](security_notes.md)
+Voice pipeline settings (in `config/app_settings.json`):
+- `voice_silence_threshold` = audio level threshold for voice detection (default: 0.02).
+- `voice_silence_duration_secs` = seconds of silence before stopping recording (default: 1.1).
+- `voice_min_record_duration_secs` = minimum recording duration before transcription (default: 0.7).
 
 ## Notes
 
 - Windows-first target; macOS is supported for local development.
 - Training is handled via notebooks; runtime loads TFLite models from `user_data/<user_id>/`.
 - Preset datasets/models are copied from `data/presets/` on startup when missing.
+
+## GitHub Repos Used
+
+- https://github.com/SYSTRAN/faster-whisper

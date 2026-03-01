@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import io
 import os
+import wave
 from typing import AsyncIterable, Iterable
 
 import numpy as np
@@ -68,6 +70,67 @@ class WhisperLocalEngine:
         audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
         audio_float = audio_int16.astype(np.float32) / 32768.0
 
+        return self._transcribe_audio_array(audio_float)
+
+    def transcribe_wav_bytes(self, wav_bytes: bytes) -> str:
+        """Run local Whisper on WAV-formatted bytes and return text.
+
+        Args:
+            wav_bytes: Audio data in WAV format (with headers)
+
+        Returns:
+            Transcribed text
+        """
+        if not wav_bytes:
+            return ""
+
+        # Parse WAV file to extract raw audio
+        wav_buffer = io.BytesIO(wav_bytes)
+        try:
+            with wave.open(wav_buffer, "rb") as wav_file:
+                # Validate format
+                n_channels = wav_file.getnchannels()
+                sample_width = wav_file.getsampwidth()
+                frame_rate = wav_file.getframerate()
+                n_frames = wav_file.getnframes()
+
+                if n_frames == 0:
+                    return ""
+
+                # Read raw audio data
+                raw_audio = wav_file.readframes(n_frames)
+
+            # Convert to float32 array
+            if sample_width == 2:  # 16-bit
+                audio_int16 = np.frombuffer(raw_audio, dtype=np.int16)
+                audio_float = audio_int16.astype(np.float32) / 32768.0
+            elif sample_width == 1:  # 8-bit
+                audio_int8 = np.frombuffer(raw_audio, dtype=np.uint8)
+                audio_float = (audio_int8.astype(np.float32) - 128) / 128.0
+            else:
+                # Assume 16-bit for other cases
+                audio_int16 = np.frombuffer(raw_audio, dtype=np.int16)
+                audio_float = audio_int16.astype(np.float32) / 32768.0
+
+            # Convert stereo to mono if needed
+            if n_channels == 2:
+                audio_float = audio_float.reshape(-1, 2).mean(axis=1)
+
+            # Resample if needed (faster-whisper expects 16kHz)
+            if frame_rate != self.sample_rate:
+                audio_float = self._resample(audio_float, frame_rate, self.sample_rate)
+
+            return self._transcribe_audio_array(audio_float)
+
+        except wave.Error:
+            # Fallback: try treating as raw PCM16
+            return self.transcribe_audio_bytes(wav_bytes)
+
+    def _transcribe_audio_array(self, audio_float: np.ndarray) -> str:
+        """Transcribe a float32 audio array using Whisper."""
+        if len(audio_float) == 0:
+            return ""
+
         model = self._ensure_model()
         segments, _info = model.transcribe(
             audio=audio_float,
@@ -80,6 +143,22 @@ class WhisperLocalEngine:
             if seg.text:
                 parts.append(seg.text.strip())
         return " ".join(parts).strip()
+
+    def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+        """Simple resampling using linear interpolation."""
+        if orig_sr == target_sr:
+            return audio
+
+        duration = len(audio) / orig_sr
+        target_length = int(duration * target_sr)
+
+        if target_length == 0:
+            return audio
+
+        # Linear interpolation resampling
+        indices = np.linspace(0, len(audio) - 1, target_length)
+        resampled = np.interp(indices, np.arange(len(audio)), audio)
+        return resampled.astype(np.float32)
 
 
 async def _to_async_iter(stream: AsyncIterable[bytes | str] | Iterable[bytes | str]):
